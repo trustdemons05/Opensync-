@@ -1,48 +1,51 @@
 # Android Alarm Helper
 
-A tiny Android app that now supports **its own native alarm engine** (no dependency on the phone's stock clock app for scheduling).
+Android alarm app with native scheduling, ringing UI, bridge control, and in-app debug tools.
 
 ## Current status
 
-✅ Working debug build available (`app-debug.apk`)  
-✅ Native alarms scheduled via `AlarmManager` (in-app)  
-✅ Ringing foreground service + alarm ring screen (Dismiss / Snooze 10m)  
-✅ Boot/package-replace reschedule support  
-✅ Embedded HTTP bridge server (`/set`) with optional token auth  
-✅ Optional callback webhook after bridge request is queued  
-✅ Top-left debug menu (view/copy/clear logs + exact alarm settings)  
-✅ GitHub release pipeline installs SDK + publishes APK checksum
+✅ Native alarms (no stock clock app dependency)  
+✅ Ringing foreground service + full-screen Dismiss/Snooze UI  
+✅ Bridge endpoint (`/set`) with optional token + callback  
+✅ **Saved alarms UI** (view / enable-disable / delete / refresh)  
+✅ **Sound selection** (System alarm / ringtone / notification)  
+✅ Debug menu (view/copy/clear logs + exact-alarm settings)  
+✅ Boot/package-replace reschedule support
 
-## Native alarm behavior
+## Manual UI flow
 
-When an alarm fires:
-- app starts a ringing foreground service
-- shows full-screen alarm UI (`Dismiss`, `Snooze 10m`)
-- repeating alarms auto-reschedule
-- one-shot alarms are removed after firing
+- Pick time
+- Optional label
+- Optional repeat days (`mon-fri`, `2,3,4,5,6`, etc.)
+- Choose sound
+- Toggle vibrate
+- Tap **Create native alarm**
+
+Then check **Scheduled alarms** section to manage existing alarms.
 
 ## Bridge endpoint
 
 Start bridge in app, then call:
 
 ```text
-http://<phone-ip>:8765/set?hour=7&minute=30&label=Wake%20up&days=mon-fri&vibrate=true&token=YOUR_TOKEN
+http://<phone-ip>:8765/set?hour=7&minute=30&label=Wake%20up&days=mon-fri&soundType=alarm&vibrate=true&token=YOUR_TOKEN
 ```
 
 Optional params:
+- `soundType` = `alarm` | `ringtone` | `notification`
 - `skipUi` (accepted for compatibility; ignored in native mode)
 - `autoLaunch` (`true`/`false`)
-- `callback` (URL for best-effort callback POST)
+- `callback` (best-effort callback POST URL)
 - `source` (string label)
 
 ## Day parsing
 
-Accepted values for `days`:
+Accepted `days` formats:
 - numeric: `2,3,4,5,6`
-- aliases: `mon,tue,wed`
+- names: `mon,tue,wed`
 - ranges: `mon-fri`, `fri-mon` (wrap supported)
 
-Android `Calendar` mapping:
+Android mapping:
 - `1` = Sunday
 - `2` = Monday
 - `3` = Tuesday
@@ -53,15 +56,10 @@ Android `Calendar` mapping:
 
 ## Permissions notes
 
-On Android 12+:
-- Exact alarms may require user approval (`SCHEDULE_EXACT_ALARM`)
+- Android 12+: exact alarm access may require approval
+- Android 13+: notifications permission may be required
 
-On Android 13+:
-- Notifications permission may be required for ringing notifications
-
-Use the top-left debug menu:
-- **Open exact alarm settings**
-- **View logs** if alarms do not fire as expected
+Use debug menu if alarms don’t fire reliably.
 
 ## Local build
 
@@ -70,7 +68,7 @@ cd android-alarm-helper
 scripts/build-debug.sh
 ```
 
-Output:
+APK output:
 
 ```text
 android-alarm-helper/app/build/outputs/apk/debug/app-debug.apk
@@ -83,7 +81,7 @@ cd android-alarm-helper
 scripts/release-local.sh
 ```
 
-Creates timestamped artifacts under:
+Artifacts in:
 
 ```text
 android-alarm-helper/releases/
@@ -91,24 +89,24 @@ android-alarm-helper/releases/
 
 ## GitHub release automation
 
-Workflow file:
+Workflow:
 
 ```text
 .github/workflows/android-alarm-helper-release.yml
 ```
 
-Trigger a downloadable GitHub Release APK by tagging and pushing:
+Create release by tag:
 
 ```bash
-git tag alarm-v0.5.0
-git push origin alarm-v0.5.0
+git tag alarm-v0.6.0
+git push origin alarm-v0.6.0
 ```
 
-or use helper:
+or helper:
 
 ```bash
 cd android-alarm-helper
 scripts/cut-release-tag.sh
 ```
 
-This builds debug APK in CI and attaches both APK + `.sha256` to the GitHub release.
+CI attaches APK + `.sha256` to release.

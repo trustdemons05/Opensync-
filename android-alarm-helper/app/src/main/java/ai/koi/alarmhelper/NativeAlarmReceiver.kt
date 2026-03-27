@@ -17,6 +17,9 @@ class NativeAlarmReceiver : BroadcastReceiver() {
             ?: "Koi Alarm"
         val vibrate = stored?.vibrate
             ?: intent.getBooleanExtra(NativeAlarmScheduler.EXTRA_VIBRATE, true)
+        val soundType = stored?.soundType
+            ?: intent.getStringExtra(NativeAlarmScheduler.EXTRA_SOUND_TYPE)
+            ?: "alarm"
 
         if (stored != null && stored.repeatDays.isNotEmpty()) {
             NativeAlarmScheduler.schedule(context, stored)
@@ -29,6 +32,7 @@ class NativeAlarmReceiver : BroadcastReceiver() {
             putExtra(AlarmRingingService.EXTRA_ALARM_ID, alarmId)
             putExtra(AlarmRingingService.EXTRA_LABEL, label)
             putExtra(AlarmRingingService.EXTRA_VIBRATE, vibrate)
+            putExtra(AlarmRingingService.EXTRA_SOUND_TYPE, soundType)
             putExtra(AlarmRingingService.EXTRA_TRANSIENT, transient)
         }
 

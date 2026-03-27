@@ -16,6 +16,7 @@ class AlarmBridgeServer(
         val days: String?,
         val skipUi: String?,
         val vibrate: String?,
+        val soundType: String?,
         val autoLaunch: String?,
         val callbackUrl: String?,
         val source: String
@@ -55,6 +56,7 @@ class AlarmBridgeServer(
                         days = params["days"],
                         skipUi = params["skipUi"],
                         vibrate = params["vibrate"],
+                        soundType = params["soundType"],
                         autoLaunch = params["autoLaunch"],
                         callbackUrl = params["callback"],
                         source = params["source"] ?: "bridge"

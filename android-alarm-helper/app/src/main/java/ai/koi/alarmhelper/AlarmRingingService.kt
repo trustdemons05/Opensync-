@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
+import android.media.AudioAttributes
 import android.media.Ringtone
 import android.media.RingtoneManager
 import android.os.Build
@@ -26,10 +27,11 @@ class AlarmRingingService : Service() {
                 val alarmId = intent.getStringExtra(EXTRA_ALARM_ID).orEmpty()
                 val label = intent.getStringExtra(EXTRA_LABEL).orEmpty().ifBlank { "Koi Alarm" }
                 val vibrate = intent.getBooleanExtra(EXTRA_VIBRATE, true)
+                val soundType = intent.getStringExtra(EXTRA_SOUND_TYPE).orEmpty().ifBlank { "alarm" }
                 val transient = intent.getBooleanExtra(EXTRA_TRANSIENT, false)
 
-                startForeground(notificationId(alarmId), buildNotification(alarmId, label, transient))
-                startRinging(vibrate)
+                startForeground(notificationId(alarmId), buildNotification(alarmId, label, soundType, transient))
+                startRinging(vibrate, soundType)
             }
 
             ACTION_DISMISS -> {
@@ -41,7 +43,8 @@ class AlarmRingingService : Service() {
                 val alarmId = intent.getStringExtra(EXTRA_ALARM_ID).orEmpty().ifBlank { "manual" }
                 val label = intent.getStringExtra(EXTRA_LABEL).orEmpty().ifBlank { "Koi Alarm" }
                 val vibrate = intent.getBooleanExtra(EXTRA_VIBRATE, true)
-                NativeAlarmScheduler.scheduleSnooze(this, alarmId, label, vibrate, minutes = 10)
+                val soundType = intent.getStringExtra(EXTRA_SOUND_TYPE).orEmpty().ifBlank { "alarm" }
+                NativeAlarmScheduler.scheduleSnooze(this, alarmId, label, vibrate, soundType, minutes = 10)
                 stopRinging()
                 stopSelf()
             }
@@ -55,7 +58,7 @@ class AlarmRingingService : Service() {
         super.onDestroy()
     }
 
-    private fun buildNotification(alarmId: String, label: String, transient: Boolean): Notification {
+    private fun buildNotification(alarmId: String, label: String, soundType: String, transient: Boolean): Notification {
         ensureChannel()
 
         val dismissIntent = Intent(this, AlarmRingingService::class.java).apply {
@@ -67,6 +70,7 @@ class AlarmRingingService : Service() {
             putExtra(EXTRA_ALARM_ID, alarmId)
             putExtra(EXTRA_LABEL, label)
             putExtra(EXTRA_VIBRATE, true)
+            putExtra(EXTRA_SOUND_TYPE, soundType)
         }
 
         val dismissPending = PendingIntent.getService(
@@ -126,16 +130,27 @@ class AlarmRingingService : Service() {
         }
     }
 
-    private fun startRinging(vibrate: Boolean) {
+    private fun startRinging(vibrate: Boolean, soundType: String) {
         stopRinging()
 
-        val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-            ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+        val uri = when (soundType) {
+            "ringtone" -> RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+            "notification" -> RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+            else -> RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+        } ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+
         ringtone = RingtoneManager.getRingtone(this, uri)
+        try {
+            ringtone?.audioAttributes = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_ALARM)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build()
+        } catch (_: Throwable) {
+        }
         ringtone?.play()
 
         if (vibrate) {
-            val vib = getSystemService(VIBRATOR_SERVICE) as? Vibrator
+            val vib = getSystemService(Vibrator::class.java)
             vib?.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 500, 400, 500), 0))
         }
     }
@@ -147,7 +162,7 @@ class AlarmRingingService : Service() {
         }
         ringtone = null
 
-        val vib = getSystemService(VIBRATOR_SERVICE) as? Vibrator
+        val vib = getSystemService(Vibrator::class.java)
         try {
             vib?.cancel()
         } catch (_: Throwable) {
@@ -166,6 +181,7 @@ class AlarmRingingService : Service() {
         const val EXTRA_ALARM_ID = "alarmId"
         const val EXTRA_LABEL = "label"
         const val EXTRA_VIBRATE = "vibrate"
+        const val EXTRA_SOUND_TYPE = "soundType"
         const val EXTRA_TRANSIENT = "transient"
     }
 }

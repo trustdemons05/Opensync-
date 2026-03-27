@@ -12,27 +12,49 @@ object NativeAlarmScheduler {
     const val EXTRA_LABEL = "label"
     const val EXTRA_VIBRATE = "vibrate"
     const val EXTRA_TRANSIENT = "transient"
+    const val EXTRA_SOUND_TYPE = "soundType"
 
     fun schedule(context: Context, alarm: NativeAlarm): Long {
         val triggerAt = computeNextTriggerMillis(alarm.hour, alarm.minute, alarm.repeatDays)
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val pending = alarmPendingIntent(context, alarm.id, alarm.label, alarm.vibrate, transient = false)
+        val pending = alarmPendingIntent(
+            context,
+            alarm.id,
+            alarm.label,
+            alarm.vibrate,
+            alarm.soundType,
+            transient = false
+        )
         alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pending)
         return triggerAt
     }
 
-    fun scheduleSnooze(context: Context, baseAlarmId: String, label: String, vibrate: Boolean, minutes: Int = 10): Long {
+    fun scheduleSnooze(
+        context: Context,
+        baseAlarmId: String,
+        label: String,
+        vibrate: Boolean,
+        soundType: String,
+        minutes: Int = 10
+    ): Long {
         val triggerAt = System.currentTimeMillis() + minutes * 60_000L
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val snoozeId = "$baseAlarmId#snooze#$triggerAt"
-        val pending = alarmPendingIntent(context, snoozeId, "$label (Snooze)", vibrate, transient = true)
+        val pending = alarmPendingIntent(
+            context,
+            snoozeId,
+            "$label (Snooze)",
+            vibrate,
+            soundType,
+            transient = true
+        )
         alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pending)
         return triggerAt
     }
 
     fun cancel(context: Context, alarmId: String) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val pending = alarmPendingIntent(context, alarmId, "", true, transient = false)
+        val pending = alarmPendingIntent(context, alarmId, "", true, "alarm", transient = false)
         alarmManager.cancel(pending)
     }
 
@@ -69,6 +91,7 @@ object NativeAlarmScheduler {
         alarmId: String,
         label: String,
         vibrate: Boolean,
+        soundType: String,
         transient: Boolean
     ): PendingIntent {
         val i = Intent(context, NativeAlarmReceiver::class.java).apply {
@@ -76,6 +99,7 @@ object NativeAlarmScheduler {
             putExtra(EXTRA_ALARM_ID, alarmId)
             putExtra(EXTRA_LABEL, label)
             putExtra(EXTRA_VIBRATE, vibrate)
+            putExtra(EXTRA_SOUND_TYPE, soundType)
             putExtra(EXTRA_TRANSIENT, transient)
         }
         val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE

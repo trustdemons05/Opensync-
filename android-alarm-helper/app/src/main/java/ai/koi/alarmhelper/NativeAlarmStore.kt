@@ -55,6 +55,7 @@ object NativeAlarmStore {
             label = optString("label"),
             repeatDays = days,
             vibrate = optBoolean("vibrate", true),
+            soundType = optString("soundType", "alarm"),
             enabled = optBoolean("enabled", true),
             createdAt = optLong("createdAt", System.currentTimeMillis()),
             source = optString("source", "manual")
@@ -68,6 +69,7 @@ object NativeAlarmStore {
         put("label", label)
         put("repeatDays", JSONArray(repeatDays))
         put("vibrate", vibrate)
+        put("soundType", soundType)
         put("enabled", enabled)
         put("createdAt", createdAt)
         put("source", source)

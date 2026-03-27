@@ -24,6 +24,7 @@ class AlarmRingActivity : AppCompatActivity() {
 
         val alarmId = intent.getStringExtra(AlarmRingingService.EXTRA_ALARM_ID).orEmpty()
         val label = intent.getStringExtra(AlarmRingingService.EXTRA_LABEL).orEmpty().ifBlank { "Koi Alarm" }
+        val soundType = intent.getStringExtra(AlarmRingingService.EXTRA_SOUND_TYPE).orEmpty().ifBlank { "alarm" }
 
         binding.alarmTitle.text = label
 
@@ -41,6 +42,7 @@ class AlarmRingActivity : AppCompatActivity() {
                 putExtra(AlarmRingingService.EXTRA_ALARM_ID, alarmId)
                 putExtra(AlarmRingingService.EXTRA_LABEL, label)
                 putExtra(AlarmRingingService.EXTRA_VIBRATE, true)
+                putExtra(AlarmRingingService.EXTRA_SOUND_TYPE, soundType)
             })
             Toast.makeText(this, "Snoozed for 10 minutes", Toast.LENGTH_SHORT).show()
             finish()

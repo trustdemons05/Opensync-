@@ -9,6 +9,9 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.view.Gravity
+import android.widget.ArrayAdapter
+import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
@@ -18,6 +21,7 @@ import androidx.core.content.ContextCompat
 import ai.koi.alarmhelper.AlarmBridgeServer.BridgeRequest
 import ai.koi.alarmhelper.AlarmBridgeServer.BridgeResponse
 import ai.koi.alarmhelper.databinding.ActivityMainBinding
+import com.google.android.material.button.MaterialButton
 import fi.iki.elonen.NanoHTTPD
 import java.net.HttpURLConnection
 import java.net.Inet4Address
@@ -57,6 +61,11 @@ class MainActivity : AppCompatActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         handleExternalIntent(intent)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        renderSavedAlarms()
     }
 
     override fun onDestroy() {
@@ -100,6 +109,16 @@ class MainActivity : AppCompatActivity() {
             logDebug("Repeat days cleared")
         }
 
+        val soundLabels = SOUND_OPTIONS.map { it.label }
+        val soundAdapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_dropdown_item_1line, soundLabels)
+        soundDropdown.setAdapter(soundAdapter)
+        soundDropdown.setText(SOUND_OPTIONS.first().label, false)
+
+        refreshAlarmsButton.setOnClickListener {
+            renderSavedAlarms()
+            logDebug("Saved alarms list refreshed")
+        }
+
         setAlarmButton.setOnClickListener {
             logDebug("Manual create alarm tapped")
             val result = createAlarm(
@@ -107,6 +126,7 @@ class MainActivity : AppCompatActivity() {
                 skipUi = skipUiCheckBox.isChecked,
                 vibrate = vibrateCheckBox.isChecked,
                 daysSpec = daysEditText.text?.toString().orEmpty(),
+                soundType = selectedSoundType(),
                 source = "manual"
             )
             if (!result.ok) {
@@ -121,6 +141,8 @@ class MainActivity : AppCompatActivity() {
         topAppBar.setNavigationOnClickListener {
             showDebugMenu()
         }
+
+        renderSavedAlarms()
     }
 
     private fun ensureCapabilities() {
@@ -193,6 +215,7 @@ class MainActivity : AppCompatActivity() {
         val daysSpec = req.days.orEmpty()
         val skipUi = parseBoolean(req.skipUi, default = false)
         val vibrate = parseBoolean(req.vibrate, default = true)
+        val soundType = normalizeSoundType(req.soundType ?: selectedSoundType())
         val autoLaunch = parseBoolean(req.autoLaunch, default = true)
 
         val requestedTime = LocalTime.of(hour, minute).format(timeFormatter)
@@ -206,6 +229,7 @@ class MainActivity : AppCompatActivity() {
                 label = label,
                 daysSpec = daysSpec,
                 vibrate = vibrate,
+                soundType = soundType,
                 source = "bridge"
             )
         } else {
@@ -222,6 +246,7 @@ class MainActivity : AppCompatActivity() {
             binding.daysEditText.setText(daysSpec)
             binding.skipUiCheckBox.isChecked = skipUi
             binding.vibrateCheckBox.isChecked = vibrate
+            binding.soundDropdown.setText(displayLabelForSoundType(soundType), false)
             renderTime()
 
             val warningSuffix = if (warnings.isEmpty()) "" else " (${warnings.joinToString("; ")})"
@@ -239,6 +264,7 @@ class MainActivity : AppCompatActivity() {
                     "hour" to hour,
                     "minute" to minute,
                     "autoLaunch" to autoLaunch,
+                    "soundType" to soundType,
                     "warnings" to warnings.joinToString("; "),
                     "triggerAt" to (result.triggerAt ?: "")
                 )
@@ -337,6 +363,9 @@ class MainActivity : AppCompatActivity() {
             readRaw(intent, data, EXTRA_VIBRATE, "vibrate"),
             default = true
         )
+        val soundType = normalizeSoundType(
+            readRaw(intent, data, EXTRA_SOUND_TYPE, "soundType") ?: selectedSoundType()
+        )
         val autoLaunch = parseBoolean(
             readRaw(intent, data, EXTRA_AUTO_LAUNCH, "autoLaunch"),
             default = true
@@ -348,6 +377,7 @@ class MainActivity : AppCompatActivity() {
         binding.daysEditText.setText(daysSpec)
         binding.skipUiCheckBox.isChecked = skipUi
         binding.vibrateCheckBox.isChecked = vibrate
+        binding.soundDropdown.setText(displayLabelForSoundType(soundType), false)
         renderTime()
 
         val warningSuffix = if (warnings.isEmpty()) "" else " (${warnings.joinToString("; ")})"
@@ -360,6 +390,7 @@ class MainActivity : AppCompatActivity() {
                 skipUi = skipUi,
                 vibrate = vibrate,
                 daysSpec = daysSpec,
+                soundType = soundType,
                 source = "intent",
                 finishAfter = true
             )
@@ -380,6 +411,7 @@ class MainActivity : AppCompatActivity() {
         skipUi: Boolean,
         vibrate: Boolean,
         daysSpec: String,
+        soundType: String,
         source: String,
         finishAfter: Boolean = false
     ): AlarmCreateResult {
@@ -393,6 +425,7 @@ class MainActivity : AppCompatActivity() {
             label = label,
             daysSpec = daysSpec,
             vibrate = vibrate,
+            soundType = soundType,
             source = source
         )
 
@@ -412,6 +445,7 @@ class MainActivity : AppCompatActivity() {
         label: String,
         daysSpec: String,
         vibrate: Boolean,
+        soundType: String,
         source: String
     ): AlarmCreateResult {
         return try {
@@ -426,6 +460,7 @@ class MainActivity : AppCompatActivity() {
                 label = safeLabel,
                 repeatDays = parsedDays.days,
                 vibrate = vibrate,
+                soundType = normalizeSoundType(soundType),
                 enabled = true,
                 source = source
             )
@@ -441,7 +476,8 @@ class MainActivity : AppCompatActivity() {
             val suffix = if (suffixes.isEmpty()) "" else " (${suffixes.joinToString("; ")})"
 
             val message = "Scheduled native alarm for $human$suffix"
-            logDebug("$message [id=$alarmId source=$source]")
+            logDebug("$message [id=$alarmId source=$source sound=${alarm.soundType}]")
+            runOnUiThread { renderSavedAlarms() }
 
             AlarmCreateResult(
                 ok = true,
@@ -533,6 +569,121 @@ class MainActivity : AppCompatActivity() {
             "0", "false", "no", "n", "off" -> false
             else -> default
         }
+    }
+
+    private fun selectedSoundType(): String {
+        val selectedLabel = binding.soundDropdown.text?.toString().orEmpty().trim()
+        return SOUND_OPTIONS.firstOrNull { it.label.equals(selectedLabel, ignoreCase = true) }?.value ?: "alarm"
+    }
+
+    private fun normalizeSoundType(raw: String?): String {
+        val normalized = raw.orEmpty().trim().lowercase(Locale.getDefault())
+        return when (normalized) {
+            "alarm", "ringtone", "notification" -> normalized
+            else -> "alarm"
+        }
+    }
+
+    private fun displayLabelForSoundType(soundType: String): String {
+        val value = normalizeSoundType(soundType)
+        return SOUND_OPTIONS.firstOrNull { it.value == value }?.label ?: SOUND_OPTIONS.first().label
+    }
+
+    private fun renderSavedAlarms() {
+        val alarms = NativeAlarmStore.list(this).sortedWith(
+            compareBy<NativeAlarm> { !it.enabled }
+                .thenBy { it.hour }
+                .thenBy { it.minute }
+                .thenBy { it.createdAt }
+        )
+
+        binding.alarmsContainer.removeAllViews()
+
+        if (alarms.isEmpty()) {
+            val empty = TextView(this).apply {
+                text = "No alarms yet. Create one above."
+                textSize = 13f
+            }
+            binding.alarmsContainer.addView(empty)
+            return
+        }
+
+        alarms.forEach { alarm ->
+            binding.alarmsContainer.addView(buildAlarmCard(alarm))
+        }
+    }
+
+    private fun buildAlarmCard(alarm: NativeAlarm): LinearLayout {
+        val wrap = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(24, 20, 24, 20)
+            val lp = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+            lp.bottomMargin = 12
+            layoutParams = lp
+            background = ContextCompat.getDrawable(this@MainActivity, android.R.drawable.dialog_holo_light_frame)
+        }
+
+        val time = String.format(Locale.getDefault(), "%02d:%02d", alarm.hour, alarm.minute)
+        val repeat = if (alarm.repeatDays.isEmpty()) "One-time" else "Repeat: ${alarm.repeatDays.joinToString(",")}"
+        val next = NativeAlarmScheduler.formatTriggerForUi(
+            NativeAlarmScheduler.computeNextTriggerMillis(alarm.hour, alarm.minute, alarm.repeatDays)
+        )
+
+        val title = TextView(this).apply {
+            text = "$time — ${alarm.label}"
+            textSize = 16f
+        }
+
+        val meta = TextView(this).apply {
+            text = "$repeat | Sound: ${displayLabelForSoundType(alarm.soundType)} | ${if (alarm.enabled) "Enabled" else "Disabled"}\nNext: $next"
+            textSize = 12f
+        }
+
+        val actions = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.END
+        }
+
+        val toggle = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+            text = if (alarm.enabled) "Disable" else "Enable"
+            setOnClickListener { toggleAlarm(alarm) }
+        }
+
+        val delete = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+            text = "Delete"
+            setOnClickListener { deleteAlarm(alarm) }
+        }
+
+        actions.addView(toggle)
+        actions.addView(delete)
+
+        wrap.addView(title)
+        wrap.addView(meta)
+        wrap.addView(actions)
+        return wrap
+    }
+
+    private fun toggleAlarm(alarm: NativeAlarm) {
+        val updated = alarm.copy(enabled = !alarm.enabled)
+        if (updated.enabled) {
+            val trigger = NativeAlarmScheduler.schedule(this, updated)
+            logDebug("Alarm re-enabled ${alarm.id}, next=${NativeAlarmScheduler.formatTriggerForUi(trigger)}")
+        } else {
+            NativeAlarmScheduler.cancel(this, updated.id)
+            logDebug("Alarm disabled ${alarm.id}")
+        }
+        NativeAlarmStore.upsert(this, updated)
+        renderSavedAlarms()
+    }
+
+    private fun deleteAlarm(alarm: NativeAlarm) {
+        NativeAlarmScheduler.cancel(this, alarm.id)
+        NativeAlarmStore.remove(this, alarm.id)
+        logDebug("Alarm deleted ${alarm.id}")
+        renderSavedAlarms()
     }
 
     private fun showDebugMenu() {
@@ -647,6 +798,7 @@ class MainActivity : AppCompatActivity() {
         const val EXTRA_DAYS = "days"
         const val EXTRA_SKIP_UI = "skipUi"
         const val EXTRA_VIBRATE = "vibrate"
+        const val EXTRA_SOUND_TYPE = "soundType"
         const val EXTRA_AUTO_LAUNCH = "autoLaunch"
 
         const val MAX_LABEL_LENGTH = 80
@@ -664,7 +816,18 @@ class MainActivity : AppCompatActivity() {
             "fri" to 6, "friday" to 6,
             "sat" to 7, "saturday" to 7
         )
+
+        private val SOUND_OPTIONS = listOf(
+            SoundOption("System alarm", "alarm"),
+            SoundOption("System ringtone", "ringtone"),
+            SoundOption("System notification", "notification")
+        )
     }
+
+    data class SoundOption(
+        val label: String,
+        val value: String
+    )
 
     data class ParsedDays(
         val days: List<Int>,

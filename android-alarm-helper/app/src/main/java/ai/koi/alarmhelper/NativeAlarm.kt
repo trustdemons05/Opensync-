@@ -7,6 +7,7 @@ data class NativeAlarm(
     val label: String,
     val repeatDays: List<Int>,
     val vibrate: Boolean,
+    val soundType: String = "alarm",
     val enabled: Boolean = true,
     val createdAt: Long = System.currentTimeMillis(),
     val source: String = "manual"
