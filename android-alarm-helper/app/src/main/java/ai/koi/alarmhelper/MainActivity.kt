@@ -2,10 +2,14 @@ package ai.koi.alarmhelper
 
 import android.app.TimePickerDialog
 import android.content.ActivityNotFoundException
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
 import android.os.Bundle
 import android.provider.AlarmClock
+import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import ai.koi.alarmhelper.AlarmBridgeServer.BridgeRequest
 import ai.koi.alarmhelper.AlarmBridgeServer.BridgeResponse
@@ -29,6 +33,7 @@ class MainActivity : AppCompatActivity() {
 
     private var bridgeServer: AlarmBridgeServer? = null
     private val recentBridgeEvents = ArrayDeque<String>()
+    private val debugLogs = ArrayDeque<String>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -38,6 +43,7 @@ class MainActivity : AppCompatActivity() {
         renderTime()
         setupUi()
         updateBridgeStatus("Bridge stopped")
+        logDebug("App started")
         handleExternalIntent(intent)
     }
 
@@ -48,6 +54,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        logDebug("App destroyed")
         stopBridgeServer()
         super.onDestroy()
     }
@@ -84,6 +91,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         setAlarmButton.setOnClickListener {
+            logDebug("Manual create alarm tapped")
             createAlarm(
                 label = labelEditText.text?.toString().orEmpty(),
                 skipUi = skipUiCheckBox.isChecked,
@@ -94,6 +102,10 @@ class MainActivity : AppCompatActivity() {
 
         bridgeToggleButton.setOnClickListener {
             if (bridgeServer == null) startBridgeServer() else stopBridgeServer()
+        }
+
+        topAppBar.setNavigationOnClickListener {
+            showDebugMenu()
         }
     }
 
@@ -113,10 +125,12 @@ class MainActivity : AppCompatActivity() {
             bridgeServer = server
             binding.bridgeToggleButton.text = "Stop bridge server"
             updateBridgeStatus("Bridge running at ${bridgeUrl()}")
+            logDebug("Bridge started at ${bridgeUrl()}")
         } catch (t: Throwable) {
             bridgeServer = null
             binding.bridgeToggleButton.text = "Start bridge server"
             updateBridgeStatus("Failed to start bridge: ${t.message}")
+            logDebug("Bridge start failed: ${t.javaClass.simpleName}: ${t.message}")
         }
     }
 
@@ -125,6 +139,7 @@ class MainActivity : AppCompatActivity() {
         bridgeServer = null
         binding.bridgeToggleButton.text = "Start bridge server"
         updateBridgeStatus("Bridge stopped")
+        logDebug("Bridge stopped")
     }
 
     private fun onBridgeRequest(req: BridgeRequest): BridgeResponse {
@@ -143,6 +158,7 @@ class MainActivity : AppCompatActivity() {
 
         val requestedTime = LocalTime.of(hour, minute).format(timeFormatter)
         val bridgeMessage = "Bridge request from ${req.source} for $requestedTime"
+        logDebug("$bridgeMessage (autoLaunch=$autoLaunch, days='${daysSpec}')")
 
         runOnUiThread {
             selectedHour = hour
@@ -179,6 +195,7 @@ class MainActivity : AppCompatActivity() {
                     "warnings" to warnings.joinToString("; ")
                 )
             )
+            logDebug("Callback queued to $callbackUrl")
         }
 
         val summary = "$requestedTime label='${label.ifBlank { "Koi Alarm" }}'"
@@ -232,8 +249,8 @@ class MainActivity : AppCompatActivity() {
                 conn.outputStream.use { it.write(payload.toByteArray()) }
                 conn.inputStream.close()
                 conn.disconnect()
-            } catch (_: Throwable) {
-                // Best-effort callback only.
+            } catch (t: Throwable) {
+                logDebug("Callback failed: ${t.javaClass.simpleName}: ${t.message}")
             }
         }.start()
     }
@@ -286,6 +303,7 @@ class MainActivity : AppCompatActivity() {
 
         val warningSuffix = if (warnings.isEmpty()) "" else " (${warnings.joinToString("; ")})"
         binding.statusText.text = "Received external request for ${formattedTime()}$warningSuffix"
+        logDebug("External intent received for ${formattedTime()}$warningSuffix")
 
         if (autoLaunch) {
             createAlarm(
@@ -340,17 +358,20 @@ class MainActivity : AppCompatActivity() {
 
             val statusSuffix = if (suffixes.isEmpty()) "" else " (${suffixes.joinToString("; ")})"
             binding.statusText.text = "Sent alarm request for ${formattedTime()}$statusSuffix"
+            logDebug("Alarm launched (rich intent) for ${formattedTime()}$statusSuffix")
             Toast.makeText(this, "Opening clock app for ${formattedTime()}", Toast.LENGTH_SHORT).show()
             if (finishAfter) finish()
         } catch (primary: Throwable) {
             try {
                 startActivity(minimalIntent)
                 binding.statusText.text = "Opened clock app in compatibility mode (${primary.javaClass.simpleName})"
+                logDebug("Alarm launched via compatibility fallback (primary=${primary.javaClass.simpleName})")
                 Toast.makeText(this, "Compatibility fallback used", Toast.LENGTH_SHORT).show()
                 if (finishAfter) finish()
             } catch (fallback: Throwable) {
                 val msg = "Alarm launch failed (${primary.javaClass.simpleName}/${fallback.javaClass.simpleName})"
                 binding.statusText.text = msg
+                logDebug("$msg")
                 Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
             }
         }
@@ -435,6 +456,67 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun showDebugMenu() {
+        val options = arrayOf("View logs", "Copy logs", "Clear logs")
+        AlertDialog.Builder(this)
+            .setTitle("Debug menu")
+            .setItems(options) { _, which ->
+                when (which) {
+                    0 -> showLogsDialog()
+                    1 -> copyLogsToClipboard()
+                    2 -> clearLogs()
+                }
+            }
+            .setNegativeButton("Close", null)
+            .show()
+    }
+
+    private fun showLogsDialog() {
+        val logs = getLogsText()
+        val view = TextView(this).apply {
+            text = logs
+            setPadding(32, 24, 32, 24)
+            textSize = 12f
+            setTextIsSelectable(true)
+            typeface = android.graphics.Typeface.MONOSPACE
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("Debug logs")
+            .setView(view)
+            .setPositiveButton("Close", null)
+            .setNeutralButton("Copy") { _, _ -> copyLogsToClipboard() }
+            .show()
+    }
+
+    private fun copyLogsToClipboard() {
+        val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+        val text = getLogsText()
+        clipboard.setPrimaryClip(ClipData.newPlainText("KoiAlarmLogs", text))
+        Toast.makeText(this, "Logs copied", Toast.LENGTH_SHORT).show()
+        logDebug("Logs copied to clipboard")
+    }
+
+    private fun clearLogs() {
+        synchronized(debugLogs) { debugLogs.clear() }
+        logDebug("Logs cleared")
+        Toast.makeText(this, "Logs cleared", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun getLogsText(): String {
+        val snapshot = synchronized(debugLogs) { debugLogs.toList() }
+        return if (snapshot.isEmpty()) "No logs yet." else snapshot.joinToString("\n")
+    }
+
+    private fun logDebug(message: String) {
+        val stamp = DateTimeFormatter.ofPattern("HH:mm:ss", Locale.getDefault()).format(LocalTime.now())
+        val line = "[$stamp] $message"
+        synchronized(debugLogs) {
+            debugLogs.addFirst(line)
+            while (debugLogs.size > MAX_DEBUG_LOG_LINES) debugLogs.removeLast()
+        }
+    }
+
     private fun updateBridgeStatus(text: String) {
         val historySuffix = if (recentBridgeEvents.isEmpty()) "" else "\nLast: ${recentBridgeEvents.first()}"
         binding.bridgeStatusText.text = "$text$historySuffix"
@@ -475,6 +557,7 @@ class MainActivity : AppCompatActivity() {
         const val EXTRA_AUTO_LAUNCH = "autoLaunch"
 
         const val MAX_LABEL_LENGTH = 80
+        const val MAX_DEBUG_LOG_LINES = 300
         const val BRIDGE_PORT = 8765
 
         private val DAY_ALIAS_TO_INDEX = mapOf(
