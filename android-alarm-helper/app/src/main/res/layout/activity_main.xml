@@ -128,10 +128,45 @@
             android:text="Create alarm" />
 
         <TextView
-            android:id="@+id/statusText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="20dp"
+            android:text="Bridge mode (OpenClaw/automation)"
+            android:textAppearance="@style/TextAppearance.Material3.TitleMedium" />
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/bridgeTokenEditText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Bridge token (optional but recommended)"
+                android:inputType="textNoSuggestions" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/bridgeToggleButton"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="Start bridge server" />
+
+        <TextView
+            android:id="@+id/bridgeStatusText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:textAppearance="@style/TextAppearance.Material3.BodySmall" />
+
+        <TextView
+            android:id="@+id/statusText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
             android:textAppearance="@style/TextAppearance.Material3.BodySmall" />
 
         <TextView
@@ -139,7 +174,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:text="External trigger examples:\n• koialarm://set?hour=7&amp;minute=30&amp;label=Wake%20up&amp;days=mon,tue,wed,thu,fri\n• action ai.koi.alarmhelper.action.SET_ALARM with extras hour/minute/label/days/skipUi/vibrate"
+            android:text="External trigger examples:\n• koialarm://set?hour=7&amp;minute=30&amp;label=Wake%20up&amp;days=mon,tue,wed,thu,fri\n• action ai.koi.alarmhelper.action.SET_ALARM with extras hour/minute/label/days/skipUi/vibrate\n• bridge HTTP: /set?hour=7&amp;minute=30&amp;label=Wake%20up&amp;token=YOUR_TOKEN"
             android:textAppearance="@style/TextAppearance.Material3.BodySmall" />
 
     </LinearLayout>

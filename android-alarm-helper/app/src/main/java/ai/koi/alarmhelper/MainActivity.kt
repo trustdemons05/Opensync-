@@ -7,9 +7,17 @@ import android.os.Bundle
 import android.provider.AlarmClock
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import ai.koi.alarmhelper.AlarmBridgeServer.BridgeRequest
+import ai.koi.alarmhelper.AlarmBridgeServer.BridgeResponse
 import ai.koi.alarmhelper.databinding.ActivityMainBinding
+import fi.iki.elonen.NanoHTTPD
+import java.net.HttpURLConnection
+import java.net.Inet4Address
+import java.net.NetworkInterface
+import java.net.URL
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
+import java.util.Collections
 import java.util.Locale
 
 class MainActivity : AppCompatActivity() {
@@ -19,6 +27,9 @@ class MainActivity : AppCompatActivity() {
     private var selectedMinute: Int = 0
     private val timeFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("hh:mm a", Locale.getDefault())
 
+    private var bridgeServer: AlarmBridgeServer? = null
+    private val recentBridgeEvents = ArrayDeque<String>()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
@@ -26,6 +37,7 @@ class MainActivity : AppCompatActivity() {
 
         renderTime()
         setupUi()
+        updateBridgeStatus("Bridge stopped")
         handleExternalIntent(intent)
     }
 
@@ -33,6 +45,11 @@ class MainActivity : AppCompatActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         handleExternalIntent(intent)
+    }
+
+    override fun onDestroy() {
+        stopBridgeServer()
+        super.onDestroy()
     }
 
     private fun setupUi() = with(binding) {
@@ -74,6 +91,151 @@ class MainActivity : AppCompatActivity() {
                 daysSpec = daysEditText.text?.toString().orEmpty()
             )
         }
+
+        bridgeToggleButton.setOnClickListener {
+            if (bridgeServer == null) startBridgeServer() else stopBridgeServer()
+        }
+    }
+
+    private fun startBridgeServer() {
+        if (bridgeServer != null) {
+            updateBridgeStatus("Bridge already running at ${bridgeUrl()}")
+            return
+        }
+
+        try {
+            val server = AlarmBridgeServer(
+                port = BRIDGE_PORT,
+                tokenProvider = { binding.bridgeTokenEditText.text?.toString().orEmpty() },
+                onAlarmRequest = { req -> onBridgeRequest(req) }
+            )
+            server.start(NanoHTTPD.SOCKET_READ_TIMEOUT, false)
+            bridgeServer = server
+            binding.bridgeToggleButton.text = "Stop bridge server"
+            updateBridgeStatus("Bridge running at ${bridgeUrl()}")
+        } catch (t: Throwable) {
+            bridgeServer = null
+            binding.bridgeToggleButton.text = "Start bridge server"
+            updateBridgeStatus("Failed to start bridge: ${t.message}")
+        }
+    }
+
+    private fun stopBridgeServer() {
+        bridgeServer?.stop()
+        bridgeServer = null
+        binding.bridgeToggleButton.text = "Start bridge server"
+        updateBridgeStatus("Bridge stopped")
+    }
+
+    private fun onBridgeRequest(req: BridgeRequest): BridgeResponse {
+        val warnings = mutableListOf<String>()
+
+        val (hour, hourWarning) = parseHour(req.hour, selectedHour)
+        val (minute, minuteWarning) = parseMinute(req.minute, selectedMinute)
+        hourWarning?.let(warnings::add)
+        minuteWarning?.let(warnings::add)
+
+        val label = req.label.orEmpty()
+        val daysSpec = req.days.orEmpty()
+        val skipUi = parseBoolean(req.skipUi, default = false)
+        val vibrate = parseBoolean(req.vibrate, default = true)
+        val autoLaunch = parseBoolean(req.autoLaunch, default = true)
+
+        val requestedTime = LocalTime.of(hour, minute).format(timeFormatter)
+        val bridgeMessage = "Bridge request from ${req.source} for $requestedTime"
+
+        runOnUiThread {
+            selectedHour = hour
+            selectedMinute = minute
+            binding.labelEditText.setText(label)
+            binding.daysEditText.setText(daysSpec)
+            binding.skipUiCheckBox.isChecked = skipUi
+            binding.vibrateCheckBox.isChecked = vibrate
+            renderTime()
+
+            val warningSuffix = if (warnings.isEmpty()) "" else " (${warnings.joinToString("; ")})"
+            binding.statusText.text = "$bridgeMessage$warningSuffix"
+
+            if (autoLaunch) {
+                createAlarm(
+                    label = label,
+                    skipUi = skipUi,
+                    vibrate = vibrate,
+                    daysSpec = daysSpec
+                )
+            }
+        }
+
+        val callbackUrl = req.callbackUrl?.takeIf { it.isNotBlank() }
+        if (callbackUrl != null) {
+            sendCallbackAsync(
+                callbackUrl = callbackUrl,
+                ok = true,
+                message = "$bridgeMessage queued",
+                extra = mapOf(
+                    "hour" to hour,
+                    "minute" to minute,
+                    "autoLaunch" to autoLaunch,
+                    "warnings" to warnings.joinToString("; ")
+                )
+            )
+        }
+
+        val summary = "$requestedTime label='${label.ifBlank { "Koi Alarm" }}'"
+        recordBridgeEvent(summary)
+
+        return BridgeResponse(
+            ok = true,
+            message = "Queued alarm: $summary",
+            extra = mapOf(
+                "time" to requestedTime,
+                "autoLaunch" to autoLaunch,
+                "warnings" to warnings.joinToString("; "),
+                "bridgeUrl" to bridgeUrl()
+            ),
+            status = 200
+        )
+    }
+
+    private fun sendCallbackAsync(
+        callbackUrl: String,
+        ok: Boolean,
+        message: String,
+        extra: Map<String, Any?> = emptyMap()
+    ) {
+        Thread {
+            try {
+                val conn = (URL(callbackUrl).openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"
+                    connectTimeout = 7000
+                    readTimeout = 7000
+                    doOutput = true
+                    setRequestProperty("Content-Type", "application/json")
+                }
+
+                val payload = buildString {
+                    append("{\"ok\":")
+                    append(if (ok) "true" else "false")
+                    append(",\"message\":\"")
+                    append(message.replace("\"", "\\\""))
+                    append("\"")
+                    extra.forEach { (k, v) ->
+                        append(",\"")
+                        append(k.replace("\"", "\\\""))
+                        append("\":\"")
+                        append(v?.toString()?.replace("\"", "\\\"") ?: "")
+                        append("\"")
+                    }
+                    append("}")
+                }
+
+                conn.outputStream.use { it.write(payload.toByteArray()) }
+                conn.inputStream.close()
+                conn.disconnect()
+            } catch (_: Throwable) {
+                // Best-effort callback only.
+            }
+        }.start()
     }
 
     private fun handleExternalIntent(intent: Intent?) {
@@ -167,7 +329,7 @@ class MainActivity : AppCompatActivity() {
             startActivity(alarmIntent)
             val suffixes = mutableListOf<String>()
             if (parsedDays.days.isNotEmpty()) suffixes += "repeats: ${parsedDays.days.joinToString(",")}"
-            if (parsedDays.unknownTokens.isNotEmpty()) suffixes += "ignored: ${parsedDays.unknownTokens.joinToString(",")}" 
+            if (parsedDays.unknownTokens.isNotEmpty()) suffixes += "ignored: ${parsedDays.unknownTokens.joinToString(",")}"
             if (label.trim().length > MAX_LABEL_LENGTH) suffixes += "label truncated to $MAX_LABEL_LENGTH chars"
 
             val statusSuffix = if (suffixes.isEmpty()) "" else " (${suffixes.joinToString("; ")})"
@@ -207,7 +369,6 @@ class MainActivity : AppCompatActivity() {
                             if (start <= end) {
                                 (start..end).forEach { days += it }
                             } else {
-                                // wrap (e.g., fri-mon)
                                 (start..7).forEach { days += it }
                                 (1..end).forEach { days += it }
                             }
@@ -260,6 +421,35 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun updateBridgeStatus(text: String) {
+        val historySuffix = if (recentBridgeEvents.isEmpty()) "" else "\nLast: ${recentBridgeEvents.first()}"
+        binding.bridgeStatusText.text = "$text$historySuffix"
+    }
+
+    private fun recordBridgeEvent(summary: String) {
+        val stamp = DateTimeFormatter.ofPattern("HH:mm:ss", Locale.getDefault()).format(LocalTime.now())
+        recentBridgeEvents.addFirst("[$stamp] $summary")
+        while (recentBridgeEvents.size > 10) recentBridgeEvents.removeLast()
+        runOnUiThread { updateBridgeStatus("Bridge running at ${bridgeUrl()}") }
+    }
+
+    private fun bridgeUrl(): String {
+        val ip = localIpv4Address() ?: "<phone-ip>"
+        return "http://$ip:$BRIDGE_PORT/set"
+    }
+
+    private fun localIpv4Address(): String? {
+        return try {
+            val interfaces = Collections.list(NetworkInterface.getNetworkInterfaces())
+            interfaces
+                .flatMap { Collections.list(it.inetAddresses) }
+                .firstOrNull { addr -> !addr.isLoopbackAddress && addr is Inet4Address }
+                ?.hostAddress
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
     companion object {
         const val ACTION_SET_ALARM = "ai.koi.alarmhelper.action.SET_ALARM"
         const val EXTRA_HOUR = "hour"
@@ -271,6 +461,7 @@ class MainActivity : AppCompatActivity() {
         const val EXTRA_AUTO_LAUNCH = "autoLaunch"
 
         const val MAX_LABEL_LENGTH = 80
+        const val BRIDGE_PORT = 8765
 
         private val DAY_ALIAS_TO_INDEX = mapOf(
             "sun" to 1, "sunday" to 1,
