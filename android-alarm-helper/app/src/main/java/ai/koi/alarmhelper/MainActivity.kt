@@ -314,7 +314,7 @@ class MainActivity : AppCompatActivity() {
         val parsedDays = parseDaysSpec(daysSpec)
         val safeLabel = label.trim().ifBlank { "Koi Alarm" }.take(MAX_LABEL_LENGTH)
 
-        val alarmIntent = Intent(AlarmClock.ACTION_SET_ALARM).apply {
+        val richIntent = Intent(AlarmClock.ACTION_SET_ALARM).apply {
             putExtra(AlarmClock.EXTRA_HOUR, selectedHour)
             putExtra(AlarmClock.EXTRA_MINUTES, selectedMinute)
             putExtra(AlarmClock.EXTRA_MESSAGE, safeLabel)
@@ -325,8 +325,14 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        val minimalIntent = Intent(AlarmClock.ACTION_SET_ALARM).apply {
+            putExtra(AlarmClock.EXTRA_HOUR, selectedHour)
+            putExtra(AlarmClock.EXTRA_MINUTES, selectedMinute)
+            putExtra(AlarmClock.EXTRA_MESSAGE, safeLabel)
+        }
+
         try {
-            startActivity(alarmIntent)
+            startActivity(richIntent)
             val suffixes = mutableListOf<String>()
             if (parsedDays.days.isNotEmpty()) suffixes += "repeats: ${parsedDays.days.joinToString(",")}"
             if (parsedDays.unknownTokens.isNotEmpty()) suffixes += "ignored: ${parsedDays.unknownTokens.joinToString(",")}"
@@ -336,9 +342,17 @@ class MainActivity : AppCompatActivity() {
             binding.statusText.text = "Sent alarm request for ${formattedTime()}$statusSuffix"
             Toast.makeText(this, "Opening clock app for ${formattedTime()}", Toast.LENGTH_SHORT).show()
             if (finishAfter) finish()
-        } catch (_: ActivityNotFoundException) {
-            binding.statusText.text = "No compatible clock app found on this device."
-            Toast.makeText(this, "No compatible clock app found", Toast.LENGTH_LONG).show()
+        } catch (primary: Throwable) {
+            try {
+                startActivity(minimalIntent)
+                binding.statusText.text = "Opened clock app in compatibility mode (${primary.javaClass.simpleName})"
+                Toast.makeText(this, "Compatibility fallback used", Toast.LENGTH_SHORT).show()
+                if (finishAfter) finish()
+            } catch (fallback: Throwable) {
+                val msg = "Alarm launch failed (${primary.javaClass.simpleName}/${fallback.javaClass.simpleName})"
+                binding.statusText.text = msg
+                Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
+            }
         }
     }
 
