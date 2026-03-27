@@ -68,9 +68,42 @@
                 android:id="@+id/daysEditText"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:hint="Repeat days (optional, e.g. 2,3,4,5,6)"
+                android:hint="Repeat days (optional, e.g. mon,tue or 2,3,4,5,6)"
                 android:inputType="text" />
         </com.google.android.material.textfield.TextInputLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="horizontal">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/weekdaysButton"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Weekdays" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/dailyButton"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:text="Daily" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/clearDaysButton"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:text="Clear" />
+        </LinearLayout>
 
         <CheckBox
             android:id="@+id/vibrateCheckBox"
@@ -106,7 +139,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:text="External trigger examples:\n• koialarm://set?hour=7&amp;minute=30&amp;label=Wake%20up&amp;days=2,3,4,5,6\n• action ai.koi.alarmhelper.action.SET_ALARM with extras hour/minute/label/days/skipUi/vibrate"
+            android:text="External trigger examples:\n• koialarm://set?hour=7&amp;minute=30&amp;label=Wake%20up&amp;days=mon,tue,wed,thu,fri\n• action ai.koi.alarmhelper.action.SET_ALARM with extras hour/minute/label/days/skipUi/vibrate"
             android:textAppearance="@style/TextAppearance.Material3.BodySmall" />
 
     </LinearLayout>
