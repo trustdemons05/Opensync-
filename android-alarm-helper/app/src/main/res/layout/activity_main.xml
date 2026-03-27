@@ -5,14 +5,31 @@
     android:layout_height="match_parent"
     android:orientation="vertical">
 
-    <com.google.android.material.appbar.MaterialToolbar
-        android:id="@+id/topAppBar"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:backgroundTint="?attr/colorSurface"
-        android:navigationIcon="@android:drawable/ic_menu_sort_by_size"
-        android:title="Koi Alarm Helper"
-        android:titleTextColor="?attr/colorOnSurface" />
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="16dp"
+        android:paddingTop="12dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="4dp">
+
+        <TextView
+            android:id="@+id/appTitle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Koi Alarm Helper"
+            android:textAppearance="@style/TextAppearance.Material3.TitleLarge" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/debugMenuButton"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Debug" />
+    </LinearLayout>
 
     <ScrollView
         android:layout_width="match_parent"
@@ -91,6 +108,8 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
+                    android:maxLines="1"
+                    android:textAllCaps="false"
                     android:text="Weekdays" />
 
                 <com.google.android.material.button.MaterialButton
@@ -100,6 +119,8 @@
                     android:layout_height="wrap_content"
                     android:layout_marginStart="8dp"
                     android:layout_weight="1"
+                    android:maxLines="1"
+                    android:textAllCaps="false"
                     android:text="Daily" />
 
                 <com.google.android.material.button.MaterialButton
@@ -109,6 +130,8 @@
                     android:layout_height="wrap_content"
                     android:layout_marginStart="8dp"
                     android:layout_weight="1"
+                    android:maxLines="1"
+                    android:textAllCaps="false"
                     android:text="Clear" />
             </LinearLayout>
 
@@ -133,13 +156,6 @@
                 android:layout_marginTop="12dp"
                 android:checked="true"
                 android:text="Vibrate" />
-
-            <CheckBox
-                android:id="@+id/skipUiCheckBox"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:text="Legacy skip-UI flag (ignored in native mode)" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/setAlarmButton"
@@ -224,7 +240,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
-                android:text="External trigger examples:\n• koialarm://set?hour=7&amp;minute=30&amp;label=Wake%20up&amp;days=mon,tue,wed,thu,fri\n• action ai.koi.alarmhelper.action.SET_ALARM with extras hour/minute/label/days/skipUi/vibrate\n• bridge HTTP: /set?hour=7&amp;minute=30&amp;label=Wake%20up&amp;token=YOUR_TOKEN"
+                android:text="External trigger examples:\n• koialarm://set?hour=7&amp;minute=30&amp;label=Wake%20up&amp;days=mon,tue,wed,thu,fri\n• action ai.koi.alarmhelper.action.SET_ALARM with extras hour/minute/label/days/vibrate/soundType\n• bridge HTTP: /set?hour=7&amp;minute=30&amp;label=Wake%20up&amp;token=YOUR_TOKEN"
                 android:textAppearance="@style/TextAppearance.Material3.BodySmall" />
 
         </LinearLayout>

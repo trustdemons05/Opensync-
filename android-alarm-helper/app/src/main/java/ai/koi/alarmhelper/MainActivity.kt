@@ -123,7 +123,7 @@ class MainActivity : AppCompatActivity() {
             logDebug("Manual create alarm tapped")
             val result = createAlarm(
                 label = labelEditText.text?.toString().orEmpty(),
-                skipUi = skipUiCheckBox.isChecked,
+                skipUi = false,
                 vibrate = vibrateCheckBox.isChecked,
                 daysSpec = daysEditText.text?.toString().orEmpty(),
                 soundType = selectedSoundType(),
@@ -138,7 +138,7 @@ class MainActivity : AppCompatActivity() {
             if (bridgeServer == null) startBridgeServer() else stopBridgeServer()
         }
 
-        topAppBar.setNavigationOnClickListener {
+        debugMenuButton.setOnClickListener {
             showDebugMenu()
         }
 
@@ -213,7 +213,6 @@ class MainActivity : AppCompatActivity() {
 
         val label = req.label.orEmpty()
         val daysSpec = req.days.orEmpty()
-        val skipUi = parseBoolean(req.skipUi, default = false)
         val vibrate = parseBoolean(req.vibrate, default = true)
         val soundType = normalizeSoundType(req.soundType ?: selectedSoundType())
         val autoLaunch = parseBoolean(req.autoLaunch, default = true)
@@ -244,7 +243,6 @@ class MainActivity : AppCompatActivity() {
             selectedMinute = minute
             binding.labelEditText.setText(label)
             binding.daysEditText.setText(daysSpec)
-            binding.skipUiCheckBox.isChecked = skipUi
             binding.vibrateCheckBox.isChecked = vibrate
             binding.soundDropdown.setText(displayLabelForSoundType(soundType), false)
             renderTime()
@@ -375,7 +373,6 @@ class MainActivity : AppCompatActivity() {
         selectedMinute = minute
         binding.labelEditText.setText(label)
         binding.daysEditText.setText(daysSpec)
-        binding.skipUiCheckBox.isChecked = skipUi
         binding.vibrateCheckBox.isChecked = vibrate
         binding.soundDropdown.setText(displayLabelForSoundType(soundType), false)
         renderTime()

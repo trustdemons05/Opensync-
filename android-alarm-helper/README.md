@@ -9,6 +9,7 @@ Android alarm app with native scheduling, ringing UI, bridge control, and in-app
 ✅ Bridge endpoint (`/set`) with optional token + callback  
 ✅ **Saved alarms UI** (view / enable-disable / delete / refresh)  
 ✅ **Sound selection** (System alarm / ringtone / notification)  
+✅ UI polish pass (header fix, button wrapping fix, removed legacy skip-UI toggle)  
 ✅ Debug menu (view/copy/clear logs + exact-alarm settings)  
 ✅ Boot/package-replace reschedule support
 
@@ -98,8 +99,8 @@ Workflow:
 Create release by tag:
 
 ```bash
-git tag alarm-v0.6.0
-git push origin alarm-v0.6.0
+git tag alarm-v0.6.1
+git push origin alarm-v0.6.1
 ```
 
 or helper:
