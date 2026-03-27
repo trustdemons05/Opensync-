@@ -12,6 +12,7 @@ permissions:
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -22,23 +23,43 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Ensure SDK path for Gradle
+      - name: Set up Android SDK tools
+        uses: android-actions/setup-android@v3
+
+      - name: Install required Android SDK packages
         run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+
+      - name: Configure local.properties
+        run: |
+          if [ -z "${ANDROID_SDK_ROOT:-}" ]; then
+            echo "ANDROID_SDK_ROOT not set" >&2
+            exit 1
+          fi
           echo "sdk.dir=${ANDROID_SDK_ROOT}" > android-alarm-helper/local.properties
 
       - name: Build debug APK
         working-directory: android-alarm-helper
-        run: ./gradlew assembleDebug
+        run: ./gradlew --no-daemon clean assembleDebug
 
-      - name: Upload build artifact
+      - name: Generate checksum
+        run: |
+          sha256sum android-alarm-helper/app/build/outputs/apk/debug/app-debug.apk > android-alarm-helper/app/build/outputs/apk/debug/app-debug.apk.sha256
+
+      - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: app-debug-apk
-          path: android-alarm-helper/app/build/outputs/apk/debug/app-debug.apk
+          path: |
+            android-alarm-helper/app/build/outputs/apk/debug/app-debug.apk
+            android-alarm-helper/app/build/outputs/apk/debug/app-debug.apk.sha256
 
       - name: Create GitHub release (tag builds)
         if: startsWith(github.ref, 'refs/tags/alarm-v')
         uses: softprops/action-gh-release@v2
         with:
-          files: android-alarm-helper/app/build/outputs/apk/debug/app-debug.apk
+          files: |
+            android-alarm-helper/app/build/outputs/apk/debug/app-debug.apk
+            android-alarm-helper/app/build/outputs/apk/debug/app-debug.apk.sha256
           generate_release_notes: true

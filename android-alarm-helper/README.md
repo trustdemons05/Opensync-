@@ -9,7 +9,8 @@ A tiny Android app that creates native phone alarms, designed as a bridge target
 ✅ External trigger support (custom action + deep link)  
 ✅ Repeat-days support via `days` (Calendar format 1..7 + names like `mon`)  
 ✅ Embedded HTTP bridge server (`/set`) with optional token auth  
-✅ Optional callback webhook after bridge request is queued
+✅ Optional callback webhook after bridge request is queued  
+✅ GitHub release pipeline now installs SDK + publishes APK checksum
 
 ## App capabilities (current)
 
@@ -108,8 +109,15 @@ Workflow file:
 Trigger a downloadable GitHub Release APK by tagging and pushing:
 
 ```bash
-git tag alarm-v0.3.0
-git push origin alarm-v0.3.0
+git tag alarm-v0.4.0
+git push origin alarm-v0.4.0
 ```
 
-This builds debug APK and attaches it to the GitHub release.
+or use helper:
+
+```bash
+cd android-alarm-helper
+scripts/cut-release-tag.sh
+```
+
+This builds debug APK in CI and attaches both APK + `.sha256` to the GitHub release.
