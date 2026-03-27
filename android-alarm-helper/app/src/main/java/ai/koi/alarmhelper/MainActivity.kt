@@ -1,16 +1,20 @@
 package ai.koi.alarmhelper
 
-import android.app.TimePickerDialog
-import android.content.ActivityNotFoundException
+import android.Manifest
+import android.app.AlarmManager
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
-import android.provider.AlarmClock
+import android.provider.Settings
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import ai.koi.alarmhelper.AlarmBridgeServer.BridgeRequest
 import ai.koi.alarmhelper.AlarmBridgeServer.BridgeResponse
 import ai.koi.alarmhelper.databinding.ActivityMainBinding
@@ -23,6 +27,7 @@ import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Collections
 import java.util.Locale
+import java.util.UUID
 
 class MainActivity : AppCompatActivity() {
 
@@ -44,6 +49,7 @@ class MainActivity : AppCompatActivity() {
         setupUi()
         updateBridgeStatus("Bridge stopped")
         logDebug("App started")
+        ensureCapabilities()
         handleExternalIntent(intent)
     }
 
@@ -61,13 +67,14 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupUi() = with(binding) {
         pickTimeButton.setOnClickListener {
-            TimePickerDialog(
+            android.app.TimePickerDialog(
                 this@MainActivity,
                 { _, hourOfDay, minute ->
                     selectedHour = hourOfDay
                     selectedMinute = minute
                     renderTime()
                     statusText.text = "Picked ${formattedTime()}"
+                    logDebug("Time picked: ${formattedTime()}")
                 },
                 selectedHour,
                 selectedMinute,
@@ -78,26 +85,33 @@ class MainActivity : AppCompatActivity() {
         weekdaysButton.setOnClickListener {
             daysEditText.setText("mon,tue,wed,thu,fri")
             statusText.text = "Preset applied: weekdays"
+            logDebug("Preset weekdays applied")
         }
 
         dailyButton.setOnClickListener {
             daysEditText.setText("sun,mon,tue,wed,thu,fri,sat")
             statusText.text = "Preset applied: daily"
+            logDebug("Preset daily applied")
         }
 
         clearDaysButton.setOnClickListener {
             daysEditText.setText("")
             statusText.text = "Repeat days cleared"
+            logDebug("Repeat days cleared")
         }
 
         setAlarmButton.setOnClickListener {
             logDebug("Manual create alarm tapped")
-            createAlarm(
+            val result = createAlarm(
                 label = labelEditText.text?.toString().orEmpty(),
                 skipUi = skipUiCheckBox.isChecked,
                 vibrate = vibrateCheckBox.isChecked,
-                daysSpec = daysEditText.text?.toString().orEmpty()
+                daysSpec = daysEditText.text?.toString().orEmpty(),
+                source = "manual"
             )
+            if (!result.ok) {
+                Toast.makeText(this@MainActivity, result.message, Toast.LENGTH_LONG).show()
+            }
         }
 
         bridgeToggleButton.setOnClickListener {
@@ -106,6 +120,31 @@ class MainActivity : AppCompatActivity() {
 
         topAppBar.setNavigationOnClickListener {
             showDebugMenu()
+        }
+    }
+
+    private fun ensureCapabilities() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val granted = ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+            if (!granted) {
+                ActivityCompat.requestPermissions(
+                    this,
+                    arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                    REQ_POST_NOTIFICATIONS
+                )
+                logDebug("Requested POST_NOTIFICATIONS permission")
+            }
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val am = getSystemService(AlarmManager::class.java)
+            if (!am.canScheduleExactAlarms()) {
+                binding.statusText.text = "Exact alarms may be restricted. Open debug menu if alarms don't ring."
+                logDebug("Exact alarm permission not granted (canScheduleExactAlarms=false)")
+            }
         }
     }
 
@@ -160,6 +199,22 @@ class MainActivity : AppCompatActivity() {
         val bridgeMessage = "Bridge request from ${req.source} for $requestedTime"
         logDebug("$bridgeMessage (autoLaunch=$autoLaunch, days='${daysSpec}')")
 
+        val result = if (autoLaunch) {
+            scheduleNativeAlarm(
+                hour = hour,
+                minute = minute,
+                label = label,
+                daysSpec = daysSpec,
+                vibrate = vibrate,
+                source = "bridge"
+            )
+        } else {
+            AlarmCreateResult(
+                ok = true,
+                message = "autoLaunch disabled; values populated in UI"
+            )
+        }
+
         runOnUiThread {
             selectedHour = hour
             selectedMinute = minute
@@ -170,29 +225,22 @@ class MainActivity : AppCompatActivity() {
             renderTime()
 
             val warningSuffix = if (warnings.isEmpty()) "" else " (${warnings.joinToString("; ")})"
-            binding.statusText.text = "$bridgeMessage$warningSuffix"
-
-            if (autoLaunch) {
-                createAlarm(
-                    label = label,
-                    skipUi = skipUi,
-                    vibrate = vibrate,
-                    daysSpec = daysSpec
-                )
-            }
+            val resultSuffix = if (result.ok) "" else " [${result.message}]"
+            binding.statusText.text = "$bridgeMessage$warningSuffix$resultSuffix"
         }
 
         val callbackUrl = req.callbackUrl?.takeIf { it.isNotBlank() }
         if (callbackUrl != null) {
             sendCallbackAsync(
                 callbackUrl = callbackUrl,
-                ok = true,
-                message = "$bridgeMessage queued",
+                ok = result.ok,
+                message = result.message,
                 extra = mapOf(
                     "hour" to hour,
                     "minute" to minute,
                     "autoLaunch" to autoLaunch,
-                    "warnings" to warnings.joinToString("; ")
+                    "warnings" to warnings.joinToString("; "),
+                    "triggerAt" to (result.triggerAt ?: "")
                 )
             )
             logDebug("Callback queued to $callbackUrl")
@@ -202,15 +250,16 @@ class MainActivity : AppCompatActivity() {
         recordBridgeEvent(summary)
 
         return BridgeResponse(
-            ok = true,
-            message = "Queued alarm: $summary",
+            ok = result.ok,
+            message = result.message,
             extra = mapOf(
                 "time" to requestedTime,
                 "autoLaunch" to autoLaunch,
                 "warnings" to warnings.joinToString("; "),
-                "bridgeUrl" to bridgeUrl()
+                "bridgeUrl" to bridgeUrl(),
+                "triggerAt" to (result.triggerAt ?: "")
             ),
-            status = 200
+            status = if (result.ok) 200 else 400
         )
     }
 
@@ -306,13 +355,17 @@ class MainActivity : AppCompatActivity() {
         logDebug("External intent received for ${formattedTime()}$warningSuffix")
 
         if (autoLaunch) {
-            createAlarm(
+            val result = createAlarm(
                 label = label,
                 skipUi = skipUi,
                 vibrate = vibrate,
                 daysSpec = daysSpec,
+                source = "intent",
                 finishAfter = true
             )
+            if (!result.ok) {
+                Toast.makeText(this, result.message, Toast.LENGTH_LONG).show()
+            }
         }
     }
 
@@ -327,64 +380,79 @@ class MainActivity : AppCompatActivity() {
         skipUi: Boolean,
         vibrate: Boolean,
         daysSpec: String,
+        source: String,
         finishAfter: Boolean = false
-    ) {
-        val parsedDays = parseDaysSpec(daysSpec)
-        val safeLabel = label.trim().ifBlank { "Koi Alarm" }.take(MAX_LABEL_LENGTH)
-
-        val richIntent = Intent(AlarmClock.ACTION_SET_ALARM).apply {
-            putExtra(AlarmClock.EXTRA_HOUR, selectedHour)
-            putExtra(AlarmClock.EXTRA_MINUTES, selectedMinute)
-            putExtra(AlarmClock.EXTRA_MESSAGE, safeLabel)
-            putExtra(AlarmClock.EXTRA_SKIP_UI, skipUi)
-            putExtra(AlarmClock.EXTRA_VIBRATE, vibrate)
-            if (parsedDays.days.isNotEmpty()) {
-                putIntegerArrayListExtra(AlarmClock.EXTRA_DAYS, ArrayList(parsedDays.days))
-            }
+    ): AlarmCreateResult {
+        if (skipUi) {
+            logDebug("skipUi requested but ignored in native mode")
         }
 
-        val minimalIntent = Intent(AlarmClock.ACTION_SET_ALARM).apply {
-            putExtra(AlarmClock.EXTRA_HOUR, selectedHour)
-            putExtra(AlarmClock.EXTRA_MINUTES, selectedMinute)
-            putExtra(AlarmClock.EXTRA_MESSAGE, safeLabel)
-        }
+        val result = scheduleNativeAlarm(
+            hour = selectedHour,
+            minute = selectedMinute,
+            label = label,
+            daysSpec = daysSpec,
+            vibrate = vibrate,
+            source = source
+        )
 
-        try {
-            startActivity(richIntent)
+        if (result.ok) {
+            binding.statusText.text = result.message
+            Toast.makeText(this, "Native alarm scheduled", Toast.LENGTH_SHORT).show()
+            if (finishAfter) finish()
+        } else {
+            binding.statusText.text = result.message
+        }
+        return result
+    }
+
+    private fun scheduleNativeAlarm(
+        hour: Int,
+        minute: Int,
+        label: String,
+        daysSpec: String,
+        vibrate: Boolean,
+        source: String
+    ): AlarmCreateResult {
+        return try {
+            val parsedDays = parseDaysSpec(daysSpec)
+            val safeLabel = label.trim().ifBlank { "Koi Alarm" }.take(MAX_LABEL_LENGTH)
+            val alarmId = UUID.randomUUID().toString()
+
+            val alarm = NativeAlarm(
+                id = alarmId,
+                hour = hour.coerceIn(0, 23),
+                minute = minute.coerceIn(0, 59),
+                label = safeLabel,
+                repeatDays = parsedDays.days,
+                vibrate = vibrate,
+                enabled = true,
+                source = source
+            )
+
+            NativeAlarmStore.upsert(this, alarm)
+            val triggerAt = NativeAlarmScheduler.schedule(this, alarm)
+            val human = NativeAlarmScheduler.formatTriggerForUi(triggerAt)
+
             val suffixes = mutableListOf<String>()
             if (parsedDays.days.isNotEmpty()) suffixes += "repeats: ${parsedDays.days.joinToString(",")}"
             if (parsedDays.unknownTokens.isNotEmpty()) suffixes += "ignored: ${parsedDays.unknownTokens.joinToString(",")}"
             if (label.trim().length > MAX_LABEL_LENGTH) suffixes += "label truncated to $MAX_LABEL_LENGTH chars"
+            val suffix = if (suffixes.isEmpty()) "" else " (${suffixes.joinToString("; ")})"
 
-            val statusSuffix = if (suffixes.isEmpty()) "" else " (${suffixes.joinToString("; ")})"
-            binding.statusText.text = "Sent alarm request for ${formattedTime()}$statusSuffix"
-            logDebug("Alarm launched (rich intent) for ${formattedTime()}$statusSuffix")
-            Toast.makeText(this, "Opening clock app for ${formattedTime()}", Toast.LENGTH_SHORT).show()
-            if (finishAfter) finish()
-        } catch (primary: Throwable) {
-            try {
-                startActivity(minimalIntent)
-                binding.statusText.text = "Opened clock app in compatibility mode (${primary.javaClass.simpleName})"
-                logDebug("Alarm launched via compatibility fallback (primary=${primary.javaClass.simpleName}: ${primary.message})")
-                Toast.makeText(this, "Compatibility fallback used", Toast.LENGTH_SHORT).show()
-                if (finishAfter) finish()
-            } catch (fallback: Throwable) {
-                val msg = "Alarm launch failed (${primary.javaClass.simpleName}/${fallback.javaClass.simpleName})"
-                binding.statusText.text = msg
-                logDebug("$msg | primary=${primary.message} | fallback=${fallback.message}")
+            val message = "Scheduled native alarm for $human$suffix"
+            logDebug("$message [id=$alarmId source=$source]")
 
-                // OEM fallback: some clock apps block ACTION_SET_ALARM for 3rd-party apps.
-                try {
-                    startActivity(Intent(AlarmClock.ACTION_SHOW_ALARMS))
-                    binding.statusText.text = "Direct set blocked. Opened alarms screen instead."
-                    logDebug("Opened alarms list fallback via ACTION_SHOW_ALARMS")
-                    Toast.makeText(this, "Opened alarms app (direct set blocked)", Toast.LENGTH_LONG).show()
-                    if (finishAfter) finish()
-                } catch (showErr: Throwable) {
-                    logDebug("Show-alarms fallback failed: ${showErr.javaClass.simpleName}: ${showErr.message}")
-                    Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
-                }
-            }
+            AlarmCreateResult(
+                ok = true,
+                message = message,
+                triggerAt = triggerAt,
+                alarmId = alarmId
+            )
+        } catch (t: Throwable) {
+            val msg = "Schedule failed: ${t.javaClass.simpleName}: ${t.message}"
+            logDebug(msg)
+            AlarmCreateResult(ok = false, message = msg)
         }
     }
 
@@ -468,7 +536,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showDebugMenu() {
-        val options = arrayOf("View logs", "Copy logs", "Clear logs")
+        val options = arrayOf("View logs", "Copy logs", "Clear logs", "Open exact alarm settings")
         AlertDialog.Builder(this)
             .setTitle("Debug menu")
             .setItems(options) { _, which ->
@@ -476,10 +544,24 @@ class MainActivity : AppCompatActivity() {
                     0 -> showLogsDialog()
                     1 -> copyLogsToClipboard()
                     2 -> clearLogs()
+                    3 -> openExactAlarmSettings()
                 }
             }
             .setNegativeButton("Close", null)
             .show()
+    }
+
+    private fun openExactAlarmSettings() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            try {
+                startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM))
+                logDebug("Opened exact alarm settings")
+            } catch (t: Throwable) {
+                logDebug("Failed to open exact alarm settings: ${t.message}")
+            }
+        } else {
+            Toast.makeText(this, "Not required on this Android version", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun showLogsDialog() {
@@ -571,6 +653,8 @@ class MainActivity : AppCompatActivity() {
         const val MAX_DEBUG_LOG_LINES = 300
         const val BRIDGE_PORT = 8765
 
+        const val REQ_POST_NOTIFICATIONS = 1001
+
         private val DAY_ALIAS_TO_INDEX = mapOf(
             "sun" to 1, "sunday" to 1,
             "mon" to 2, "monday" to 2,
@@ -585,5 +669,12 @@ class MainActivity : AppCompatActivity() {
     data class ParsedDays(
         val days: List<Int>,
         val unknownTokens: List<String>
+    )
+
+    data class AlarmCreateResult(
+        val ok: Boolean,
+        val message: String,
+        val triggerAt: Long? = null,
+        val alarmId: String? = null
     )
 }

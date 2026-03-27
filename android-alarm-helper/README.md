@@ -1,44 +1,48 @@
 # Android Alarm Helper
 
-A tiny Android app that creates native phone alarms, designed as a bridge target for OpenClaw.
+A tiny Android app that now supports **its own native alarm engine** (no dependency on the phone's stock clock app for scheduling).
 
 ## Current status
 
 ✅ Working debug build available (`app-debug.apk`)  
-✅ Manual UI flow works (pick time, label, create alarm)  
-✅ External trigger support (custom action + deep link)  
-✅ Repeat-days support via `days` (Calendar format 1..7 + names like `mon`)  
+✅ Native alarms scheduled via `AlarmManager` (in-app)  
+✅ Ringing foreground service + alarm ring screen (Dismiss / Snooze 10m)  
+✅ Boot/package-replace reschedule support  
 ✅ Embedded HTTP bridge server (`/set`) with optional token auth  
 ✅ Optional callback webhook after bridge request is queued  
-✅ Compatibility fallback for OEM clock apps (minimal intent retry)  
-✅ Top-left debug menu (view/copy/clear logs in-app)  
-✅ OEM fallback: if direct set is blocked, open alarms screen automatically  
-✅ GitHub release pipeline now installs SDK + publishes APK checksum
+✅ Top-left debug menu (view/copy/clear logs + exact alarm settings)  
+✅ GitHub release pipeline installs SDK + publishes APK checksum
 
-## App capabilities (current)
+## Native alarm behavior
 
-- Create alarm with:
-  - `hour`
-  - `minute`
-  - `label`
-  - `days` (optional)
-  - `skipUi` (optional)
-  - `vibrate` (optional)
+When an alarm fires:
+- app starts a ringing foreground service
+- shows full-screen alarm UI (`Dismiss`, `Snooze 10m`)
+- repeating alarms auto-reschedule
+- one-shot alarms are removed after firing
 
-- Input quality-of-life:
-  - day presets (`Weekdays`, `Daily`, `Clear`)
-  - flexible day parser: `2,3,4,5,6`, `mon,tue`, `mon-fri`
-  - bad input clamping and warnings shown in status
+## Bridge endpoint
 
-- Bridge mode:
-  - start/stop HTTP server from inside app
-  - endpoint: `http://<phone-ip>:8765/set`
-  - optional token check (`token` query param or `X-Alarm-Token` header)
-  - optional callback: `callback=<url>`
+Start bridge in app, then call:
 
-## Day mapping
+```text
+http://<phone-ip>:8765/set?hour=7&minute=30&label=Wake%20up&days=mon-fri&vibrate=true&token=YOUR_TOKEN
+```
 
-Android `Calendar` constants:
+Optional params:
+- `skipUi` (accepted for compatibility; ignored in native mode)
+- `autoLaunch` (`true`/`false`)
+- `callback` (URL for best-effort callback POST)
+- `source` (string label)
+
+## Day parsing
+
+Accepted values for `days`:
+- numeric: `2,3,4,5,6`
+- aliases: `mon,tue,wed`
+- ranges: `mon-fri`, `fri-mon` (wrap supported)
+
+Android `Calendar` mapping:
 - `1` = Sunday
 - `2` = Monday
 - `3` = Tuesday
@@ -47,33 +51,17 @@ Android `Calendar` constants:
 - `6` = Friday
 - `7` = Saturday
 
-## External trigger examples
+## Permissions notes
 
-Deep link:
+On Android 12+:
+- Exact alarms may require user approval (`SCHEDULE_EXACT_ALARM`)
 
-```text
-koialarm://set?hour=7&minute=30&label=Wake%20up&days=mon,tue,wed,thu,fri&skipUi=true&vibrate=true
-```
+On Android 13+:
+- Notifications permission may be required for ringing notifications
 
-Custom action:
-
-- Action: `ai.koi.alarmhelper.action.SET_ALARM`
-- Extras:
-  - `hour` (Int/String)
-  - `minute` (Int/String)
-  - `label` (String)
-  - `days` (String, e.g. `mon-fri` or `2,3,4,5,6`)
-  - `skipUi` (Boolean/String)
-  - `vibrate` (Boolean/String)
-  - `autoLaunch` (Boolean/String; default `true`)
-
-HTTP bridge (`GET` or `POST` query params):
-
-```text
-http://<phone-ip>:8765/set?hour=7&minute=30&label=Wake%20up&days=mon-fri&token=YOUR_TOKEN&callback=https://example.com/hook
-```
-
-Response is JSON (`ok`, `message`, metadata).
+Use the top-left debug menu:
+- **Open exact alarm settings**
+- **View logs** if alarms do not fire as expected
 
 ## Local build
 
@@ -112,8 +100,8 @@ Workflow file:
 Trigger a downloadable GitHub Release APK by tagging and pushing:
 
 ```bash
-git tag alarm-v0.4.3
-git push origin alarm-v0.4.3
+git tag alarm-v0.5.0
+git push origin alarm-v0.5.0
 ```
 
 or use helper:
