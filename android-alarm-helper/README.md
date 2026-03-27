@@ -12,6 +12,7 @@ A tiny Android app that creates native phone alarms, designed as a bridge target
 ✅ Optional callback webhook after bridge request is queued  
 ✅ Compatibility fallback for OEM clock apps (minimal intent retry)  
 ✅ Top-left debug menu (view/copy/clear logs in-app)  
+✅ OEM fallback: if direct set is blocked, open alarms screen automatically  
 ✅ GitHub release pipeline now installs SDK + publishes APK checksum
 
 ## App capabilities (current)
@@ -111,8 +112,8 @@ Workflow file:
 Trigger a downloadable GitHub Release APK by tagging and pushing:
 
 ```bash
-git tag alarm-v0.4.2
-git push origin alarm-v0.4.2
+git tag alarm-v0.4.3
+git push origin alarm-v0.4.3
 ```
 
 or use helper:

@@ -365,14 +365,25 @@ class MainActivity : AppCompatActivity() {
             try {
                 startActivity(minimalIntent)
                 binding.statusText.text = "Opened clock app in compatibility mode (${primary.javaClass.simpleName})"
-                logDebug("Alarm launched via compatibility fallback (primary=${primary.javaClass.simpleName})")
+                logDebug("Alarm launched via compatibility fallback (primary=${primary.javaClass.simpleName}: ${primary.message})")
                 Toast.makeText(this, "Compatibility fallback used", Toast.LENGTH_SHORT).show()
                 if (finishAfter) finish()
             } catch (fallback: Throwable) {
                 val msg = "Alarm launch failed (${primary.javaClass.simpleName}/${fallback.javaClass.simpleName})"
                 binding.statusText.text = msg
-                logDebug("$msg")
-                Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
+                logDebug("$msg | primary=${primary.message} | fallback=${fallback.message}")
+
+                // OEM fallback: some clock apps block ACTION_SET_ALARM for 3rd-party apps.
+                try {
+                    startActivity(Intent(AlarmClock.ACTION_SHOW_ALARMS))
+                    binding.statusText.text = "Direct set blocked. Opened alarms screen instead."
+                    logDebug("Opened alarms list fallback via ACTION_SHOW_ALARMS")
+                    Toast.makeText(this, "Opened alarms app (direct set blocked)", Toast.LENGTH_LONG).show()
+                    if (finishAfter) finish()
+                } catch (showErr: Throwable) {
+                    logDebug("Show-alarms fallback failed: ${showErr.javaClass.simpleName}: ${showErr.message}")
+                    Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
+                }
             }
         }
     }
