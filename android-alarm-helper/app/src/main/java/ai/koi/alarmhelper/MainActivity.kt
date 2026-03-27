@@ -9,6 +9,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.graphics.Color
 import android.view.Gravity
 import android.widget.ArrayAdapter
 import android.widget.LinearLayout
@@ -22,6 +23,7 @@ import ai.koi.alarmhelper.AlarmBridgeServer.BridgeRequest
 import ai.koi.alarmhelper.AlarmBridgeServer.BridgeResponse
 import ai.koi.alarmhelper.databinding.ActivityMainBinding
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.card.MaterialCardView
 import fi.iki.elonen.NanoHTTPD
 import java.net.HttpURLConnection
 import java.net.Inet4Address
@@ -141,6 +143,16 @@ class MainActivity : AppCompatActivity() {
         debugMenuButton.setOnClickListener {
             showDebugMenu()
         }
+
+        bottomNav.setOnItemSelectedListener { item ->
+            when (item.itemId) {
+                R.id.nav_create -> showTab(Tab.CREATE)
+                R.id.nav_alarms -> showTab(Tab.ALARMS)
+                R.id.nav_bridge -> showTab(Tab.BRIDGE)
+                else -> false
+            }
+        }
+        bottomNav.selectedItemId = R.id.nav_create
 
         renderSavedAlarms()
     }
@@ -610,17 +622,25 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun buildAlarmCard(alarm: NativeAlarm): LinearLayout {
-        val wrap = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(24, 20, 24, 20)
+    private fun buildAlarmCard(alarm: NativeAlarm): MaterialCardView {
+        val card = MaterialCardView(this).apply {
+            radius = 20f
+            strokeWidth = 2
+            setCardBackgroundColor(Color.parseColor("#251F33"))
+            strokeColor = Color.parseColor("#4A3F63")
+            cardElevation = 0f
+            useCompatPadding = false
             val lp = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             )
-            lp.bottomMargin = 12
+            lp.bottomMargin = 14
             layoutParams = lp
-            background = ContextCompat.getDrawable(this@MainActivity, android.R.drawable.dialog_holo_light_frame)
+        }
+
+        val wrap = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(24, 20, 24, 20)
         }
 
         val time = String.format(Locale.getDefault(), "%02d:%02d", alarm.hour, alarm.minute)
@@ -631,17 +651,21 @@ class MainActivity : AppCompatActivity() {
 
         val title = TextView(this).apply {
             text = "$time — ${alarm.label}"
-            textSize = 16f
+            textSize = 17f
+            setTextColor(Color.parseColor("#F4EEFF"))
         }
 
         val meta = TextView(this).apply {
             text = "$repeat | Sound: ${displayLabelForSoundType(alarm.soundType)} | ${if (alarm.enabled) "Enabled" else "Disabled"}\nNext: $next"
             textSize = 12f
+            setTextColor(Color.parseColor("#CAB8E6"))
+            setPadding(0, 6, 0, 0)
         }
 
         val actions = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.END
+            setPadding(0, 12, 0, 0)
         }
 
         val toggle = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
@@ -652,6 +676,7 @@ class MainActivity : AppCompatActivity() {
         val delete = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
             text = "Delete"
             setOnClickListener { deleteAlarm(alarm) }
+            setPadding(20, paddingTop, 20, paddingBottom)
         }
 
         actions.addView(toggle)
@@ -660,7 +685,8 @@ class MainActivity : AppCompatActivity() {
         wrap.addView(title)
         wrap.addView(meta)
         wrap.addView(actions)
-        return wrap
+        card.addView(wrap)
+        return card
     }
 
     private fun toggleAlarm(alarm: NativeAlarm) {
@@ -681,6 +707,14 @@ class MainActivity : AppCompatActivity() {
         NativeAlarmStore.remove(this, alarm.id)
         logDebug("Alarm deleted ${alarm.id}")
         renderSavedAlarms()
+    }
+
+    private fun showTab(tab: Tab): Boolean {
+        binding.createTab.visibility = if (tab == Tab.CREATE) android.view.View.VISIBLE else android.view.View.GONE
+        binding.alarmsTab.visibility = if (tab == Tab.ALARMS) android.view.View.VISIBLE else android.view.View.GONE
+        binding.bridgeTab.visibility = if (tab == Tab.BRIDGE) android.view.View.VISIBLE else android.view.View.GONE
+        if (tab == Tab.ALARMS) renderSavedAlarms()
+        return true
     }
 
     private fun showDebugMenu() {
@@ -819,6 +853,12 @@ class MainActivity : AppCompatActivity() {
             SoundOption("System ringtone", "ringtone"),
             SoundOption("System notification", "notification")
         )
+    }
+
+    enum class Tab {
+        CREATE,
+        ALARMS,
+        BRIDGE
     }
 
     data class SoundOption(
