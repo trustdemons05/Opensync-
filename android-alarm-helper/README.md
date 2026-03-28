@@ -9,13 +9,19 @@ Android alarm app with native scheduling, ringing UI, bridge control, and in-app
 ✅ Bridge endpoint (`/set`) with optional token + callback  
 ✅ **Saved alarms UI** (view / enable-disable / delete / refresh)  
 ✅ **Sound selection** (System alarm / ringtone / notification)  
-✅ UI declutter with bottom tabs (Create / Alarms / Bridge)  
-✅ Better alarm cards (dark themed, improved spacing)  
-✅ Debug menu (view/copy/clear logs + exact-alarm settings)  
+✅ UI declutter with bottom tabs (Alarms / Logs / Bridge)  
+✅ Better alarm cards (dark themed, improved spacing, cleaner actions)  
+✅ Dedicated Logs tab (view/copy/clear logs + exact-alarm settings shortcut)  
 ✅ Boot/package-replace reschedule support
 
 ## Manual UI flow
 
+Bottom tabs:
+- **Alarms**: create + manage alarms, plus top summary strip
+- **Logs**: full debug logs with copy/clear actions
+- **Bridge**: token + local endpoint controls
+
+Create flow (inside **Alarms** tab):
 - Pick time
 - Optional label
 - Optional repeat days (`mon-fri`, `2,3,4,5,6`, etc.)
@@ -23,7 +29,7 @@ Android alarm app with native scheduling, ringing UI, bridge control, and in-app
 - Toggle vibrate
 - Tap **Create native alarm**
 
-Then check **Scheduled alarms** section to manage existing alarms.
+Then use the **Scheduled alarms** list in the same tab for enable/disable/delete.
 
 ## Bridge endpoint
 
@@ -61,7 +67,7 @@ Android mapping:
 - Android 12+: exact alarm access may require approval
 - Android 13+: notifications permission may be required
 
-Use debug menu if alarms don’t fire reliably.
+Use the Logs tab (exact alarm settings shortcut) if alarms don’t fire reliably.
 
 ## Local build
 

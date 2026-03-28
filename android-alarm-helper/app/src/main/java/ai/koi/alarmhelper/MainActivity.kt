@@ -9,6 +9,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.graphics.Color
 import android.view.Gravity
 import android.widget.ArrayAdapter
 import android.widget.LinearLayout
@@ -22,7 +23,6 @@ import ai.koi.alarmhelper.AlarmBridgeServer.BridgeResponse
 import ai.koi.alarmhelper.databinding.ActivityMainBinding
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
-import com.google.android.material.color.MaterialColors
 import fi.iki.elonen.NanoHTTPD
 import java.net.HttpURLConnection
 import java.net.Inet4Address
@@ -141,16 +141,16 @@ class MainActivity : AppCompatActivity() {
             if (bridgeServer == null) startBridgeServer() else stopBridgeServer()
         }
 
-        refreshLogsButton.setOnClickListener {
-            renderLogs()
-        }
-
         copyLogsButton.setOnClickListener {
             copyLogsToClipboard()
         }
 
         clearLogsButton.setOnClickListener {
             clearLogs()
+        }
+
+        exactAlarmSettingsButton.setOnClickListener {
+            openExactAlarmSettings()
         }
 
         bottomNav.setOnItemSelectedListener { item ->
@@ -661,27 +661,22 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun buildAlarmCard(alarm: NativeAlarm): MaterialCardView {
-        val surfaceColor = MaterialColors.getColor(this, com.google.android.material.R.attr.colorSurfaceContainerHigh, 0)
-        val outlineColor = MaterialColors.getColor(this, com.google.android.material.R.attr.colorOutlineVariant, 0)
-        val titleColor = MaterialColors.getColor(this, com.google.android.material.R.attr.colorOnSurface, 0)
-        val metaColor = MaterialColors.getColor(this, com.google.android.material.R.attr.colorOnSurfaceVariant, 0)
-
         val card = MaterialCardView(this).apply {
-            radius = dp(16).toFloat()
+            radius = dp(18).toFloat()
             strokeWidth = dp(1)
-            setCardBackgroundColor(surfaceColor)
-            strokeColor = outlineColor
+            setCardBackgroundColor(Color.parseColor("#251F33"))
+            strokeColor = Color.parseColor("#4A3F63")
             cardElevation = 0f
             useCompatPadding = false
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { bottomMargin = dp(10) }
+            ).apply { bottomMargin = dp(12) }
         }
 
         val wrap = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(14), dp(12), dp(14), dp(12))
+            setPadding(dp(16), dp(14), dp(16), dp(14))
         }
 
         val time = String.format(Locale.getDefault(), "%02d:%02d", alarm.hour, alarm.minute)
@@ -692,21 +687,21 @@ class MainActivity : AppCompatActivity() {
 
         val title = TextView(this).apply {
             text = "$time — ${alarm.label}"
-            textSize = 16f
-            setTextColor(titleColor)
+            textSize = 17f
+            setTextColor(Color.parseColor("#F4EEFF"))
         }
 
         val meta = TextView(this).apply {
-            text = "$repeat | Sound: ${displayLabelForSoundType(alarm.soundType)} | ${if (alarm.enabled) "Enabled" else "Disabled"}\nNext: $next"
+            text = "$repeat\nSound: ${displayLabelForSoundType(alarm.soundType)} • ${if (alarm.enabled) "Enabled" else "Disabled"}\nNext: $next"
             textSize = 12f
-            setTextColor(metaColor)
-            setPadding(0, dp(4), 0, 0)
+            setTextColor(Color.parseColor("#CAB8E6"))
+            setPadding(0, dp(8), 0, 0)
         }
 
         val actions = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.END
-            setPadding(0, dp(10), 0, 0)
+            setPadding(0, dp(12), 0, 0)
         }
 
         val toggle = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
@@ -717,7 +712,11 @@ class MainActivity : AppCompatActivity() {
         val delete = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
             text = "Delete"
             setOnClickListener { deleteAlarm(alarm) }
-            setPadding(dp(14), paddingTop, dp(14), paddingBottom)
+            setPadding(dp(16), paddingTop, dp(16), paddingBottom)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { marginStart = dp(8) }
         }
 
         actions.addView(toggle)
@@ -773,7 +772,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun renderLogs() {
-        binding.logsText.text = getLogsText()
+        binding.logsTextView.text = getLogsText()
     }
 
     private fun copyLogsToClipboard() {
@@ -804,7 +803,7 @@ class MainActivity : AppCompatActivity() {
             while (debugLogs.size > MAX_DEBUG_LOG_LINES) debugLogs.removeLast()
         }
         runOnUiThread {
-            binding.compactLogText.text = line
+            binding.latestActivityText.text = "Latest activity: $line"
             if (binding.logsTab.visibility == android.view.View.VISIBLE) renderLogs()
         }
     }
