@@ -12,6 +12,7 @@ Android alarm app with native scheduling, ringing UI, bridge control, and in-app
 ✅ UI declutter with bottom tabs (Alarms / Logs / Bridge)  
 ✅ Better alarm cards (dark themed, improved spacing, cleaner actions)  
 ✅ Dedicated Logs tab (view/copy/clear logs + exact-alarm settings shortcut)  
+✅ App-only relay mode via FCM data messages (token-based)  
 ✅ Boot/package-replace reschedule support
 
 ## Manual UI flow
@@ -45,6 +46,27 @@ Optional params:
 - `autoLaunch` (`true`/`false`)
 - `callback` (best-effort callback POST URL)
 - `source` (string label)
+
+## App-only relay mode (FCM)
+
+Use this when you want no LAN URL/tunnel dependency.
+
+In **Bridge** tab:
+1. Fill Firebase values:
+   - `projectId`
+   - `applicationId`
+   - `apiKey`
+   - `senderId` (project number)
+2. Tap **Save relay config**
+3. Tap **Fetch device token**
+4. Copy token and use it as target for FCM data messages
+
+The app accepts FCM **data payload** fields matching bridge params:
+- `hour`, `minute` (required)
+- `label`, `days`, `vibrate`, `soundType`, `autoLaunch`, `callback`, `source`
+- `token` (optional shared token; if set in app bridge token field, it is enforced)
+
+Relay processing runs in `RelayMessagingService` and schedules native alarms directly.
 
 ## Day parsing
 
@@ -106,8 +128,8 @@ Workflow:
 Create release by tag:
 
 ```bash
-git tag alarm-v0.6.2
-git push origin alarm-v0.6.2
+git tag alarm-v0.7.0
+git push origin alarm-v0.7.0
 ```
 
 or helper:

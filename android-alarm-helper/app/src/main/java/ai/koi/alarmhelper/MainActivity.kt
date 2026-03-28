@@ -52,8 +52,10 @@ class MainActivity : AppCompatActivity() {
 
         renderTime()
         setupUi()
+        loadRelayConfigIntoUi()
         updateBridgeStatus("Bridge stopped")
         renderLogs()
+        renderRelayState()
         logDebug("App started")
         ensureCapabilities()
         handleExternalIntent(intent)
@@ -69,6 +71,7 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         renderSavedAlarms()
         renderLogs()
+        renderRelayState()
     }
 
     override fun onDestroy() {
@@ -141,6 +144,19 @@ class MainActivity : AppCompatActivity() {
             if (bridgeServer == null) startBridgeServer() else stopBridgeServer()
         }
 
+        saveRelayConfigButton.setOnClickListener {
+            saveRelayConfigFromUi()
+        }
+
+        fetchRelayTokenButton.setOnClickListener {
+            saveRelayConfigFromUi(silent = true)
+            fetchRelayToken()
+        }
+
+        copyRelayTokenButton.setOnClickListener {
+            copyRelayTokenToClipboard()
+        }
+
         copyLogsButton.setOnClickListener {
             copyLogsToClipboard()
         }
@@ -193,6 +209,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startBridgeServer() {
+        RelayConfigStore.updateSharedToken(this, binding.bridgeTokenEditText.text?.toString().orEmpty())
         if (bridgeServer != null) {
             updateBridgeStatus("Bridge already running at ${bridgeUrl()}")
             return
@@ -769,6 +786,73 @@ class MainActivity : AppCompatActivity() {
         } else {
             Toast.makeText(this, "Not required on this Android version", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    private fun loadRelayConfigIntoUi() {
+        val cfg = RelayConfigStore.load(this)
+        binding.relayProjectIdEditText.setText(cfg.projectId)
+        binding.relayApplicationIdEditText.setText(cfg.applicationId)
+        binding.relayApiKeyEditText.setText(cfg.apiKey)
+        binding.relaySenderIdEditText.setText(cfg.senderId)
+        if (binding.bridgeTokenEditText.text.isNullOrBlank()) {
+            binding.bridgeTokenEditText.setText(cfg.sharedToken)
+        }
+        renderRelayState()
+    }
+
+    private fun saveRelayConfigFromUi(silent: Boolean = false) {
+        val config = RelayConfig(
+            projectId = binding.relayProjectIdEditText.text?.toString().orEmpty(),
+            applicationId = binding.relayApplicationIdEditText.text?.toString().orEmpty(),
+            apiKey = binding.relayApiKeyEditText.text?.toString().orEmpty(),
+            senderId = binding.relaySenderIdEditText.text?.toString().orEmpty(),
+            sharedToken = binding.bridgeTokenEditText.text?.toString().orEmpty()
+        )
+        RelayConfigStore.save(this, config)
+        RelayConfigStore.updateSharedToken(this, config.sharedToken)
+        if (!silent) {
+            Toast.makeText(this, "Relay config saved", Toast.LENGTH_SHORT).show()
+        }
+        renderRelayState("Relay status: config saved")
+    }
+
+    private fun fetchRelayToken() {
+        val cfg = RelayConfigStore.load(this)
+        RelayFirebase.fetchRelayToken(this, cfg) { result ->
+            runOnUiThread {
+                if (result.isSuccess) {
+                    val token = result.getOrNull().orEmpty()
+                    RelayConfigStore.saveDeviceToken(this, token)
+                    RelayConfigStore.saveLastEvent(this, "Relay token fetched")
+                    renderRelayState("Relay status: token ready")
+                    Toast.makeText(this, "Relay token fetched", Toast.LENGTH_SHORT).show()
+                } else {
+                    val msg = result.exceptionOrNull()?.message ?: "unknown relay error"
+                    RelayConfigStore.saveLastEvent(this, "Relay token failed: $msg")
+                    renderRelayState("Relay status: token fetch failed")
+                    Toast.makeText(this, "Relay token failed: $msg", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+
+    private fun copyRelayTokenToClipboard() {
+        val token = RelayConfigStore.load(this).lastDeviceToken
+        if (token.isBlank()) {
+            Toast.makeText(this, "No relay token yet", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText("KoiRelayDeviceToken", token))
+        Toast.makeText(this, "Relay token copied", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun renderRelayState(statusLine: String? = null) {
+        val cfg = RelayConfigStore.load(this)
+        val status = statusLine ?: "Relay status: ${if (cfg.hasFirebaseCoreFields()) "configured" else "needs config"}"
+        binding.relayStatusText.text = "$status\nLast event: ${cfg.lastEvent.ifBlank { "--" }}"
+        binding.relayTokenText.text = "Device token: ${cfg.lastDeviceToken.ifBlank { "--" }}"
     }
 
     private fun renderLogs() {

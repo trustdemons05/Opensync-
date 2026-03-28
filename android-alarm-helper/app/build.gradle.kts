@@ -11,8 +11,8 @@ android {
         applicationId = "ai.koi.alarmhelper"
         minSdk = 26
         targetSdk = 34
-        versionCode = 12
-        versionName = "0.6.3"
+        versionCode = 13
+        versionName = "0.7.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -47,4 +47,7 @@ dependencies {
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.activity:activity-ktx:1.9.1")
     implementation("org.nanohttpd:nanohttpd:2.3.1")
+
+    implementation(platform("com.google.firebase:firebase-bom:33.5.1"))
+    implementation("com.google.firebase:firebase-messaging-ktx")
 }
