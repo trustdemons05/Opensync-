@@ -9,13 +9,11 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
-import android.graphics.Color
 import android.view.Gravity
 import android.widget.ArrayAdapter
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -24,6 +22,7 @@ import ai.koi.alarmhelper.AlarmBridgeServer.BridgeResponse
 import ai.koi.alarmhelper.databinding.ActivityMainBinding
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
+import com.google.android.material.color.MaterialColors
 import fi.iki.elonen.NanoHTTPD
 import java.net.HttpURLConnection
 import java.net.Inet4Address
@@ -54,6 +53,7 @@ class MainActivity : AppCompatActivity() {
         renderTime()
         setupUi()
         updateBridgeStatus("Bridge stopped")
+        renderLogs()
         logDebug("App started")
         ensureCapabilities()
         handleExternalIntent(intent)
@@ -68,6 +68,7 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         renderSavedAlarms()
+        renderLogs()
     }
 
     override fun onDestroy() {
@@ -140,21 +141,30 @@ class MainActivity : AppCompatActivity() {
             if (bridgeServer == null) startBridgeServer() else stopBridgeServer()
         }
 
-        debugMenuButton.setOnClickListener {
-            showDebugMenu()
+        refreshLogsButton.setOnClickListener {
+            renderLogs()
+        }
+
+        copyLogsButton.setOnClickListener {
+            copyLogsToClipboard()
+        }
+
+        clearLogsButton.setOnClickListener {
+            clearLogs()
         }
 
         bottomNav.setOnItemSelectedListener { item ->
             when (item.itemId) {
-                R.id.nav_create -> showTab(Tab.CREATE)
                 R.id.nav_alarms -> showTab(Tab.ALARMS)
+                R.id.nav_logs -> showTab(Tab.LOGS)
                 R.id.nav_bridge -> showTab(Tab.BRIDGE)
                 else -> false
             }
         }
-        bottomNav.selectedItemId = R.id.nav_create
+        bottomNav.selectedItemId = R.id.nav_alarms
 
         renderSavedAlarms()
+        renderLogs()
     }
 
     private fun ensureCapabilities() {
@@ -176,7 +186,7 @@ class MainActivity : AppCompatActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val am = getSystemService(AlarmManager::class.java)
             if (!am.canScheduleExactAlarms()) {
-                binding.statusText.text = "Exact alarms may be restricted. Open debug menu if alarms don't ring."
+                binding.statusText.text = "Exact alarms may be restricted. Open Logs tab > exact alarm settings if alarms don't ring."
                 logDebug("Exact alarm permission not granted (canScheduleExactAlarms=false)")
             }
         }
@@ -607,11 +617,14 @@ class MainActivity : AppCompatActivity() {
         )
 
         binding.alarmsContainer.removeAllViews()
+        updateAlarmSummary(alarms)
 
         if (alarms.isEmpty()) {
             val empty = TextView(this).apply {
                 text = "No alarms yet. Create one above."
                 textSize = 13f
+                setTextColor(Color.parseColor("#CAB8E6"))
+                setPadding(8, 8, 8, 8)
             }
             binding.alarmsContainer.addView(empty)
             return
@@ -622,25 +635,53 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun updateAlarmSummary(alarms: List<NativeAlarm>) {
+        val enabled = alarms.filter { it.enabled }
+        if (enabled.isEmpty()) {
+            binding.nextAlarmSummaryText.text = "No enabled alarms"
+            return
+        }
+
+        val nextAlarm = enabled.minByOrNull {
+            NativeAlarmScheduler.computeNextTriggerMillis(it.hour, it.minute, it.repeatDays)
+        }
+
+        if (nextAlarm == null) {
+            binding.nextAlarmSummaryText.text = "No enabled alarms"
+            return
+        }
+
+        val nextTrigger = NativeAlarmScheduler.computeNextTriggerMillis(
+            nextAlarm.hour,
+            nextAlarm.minute,
+            nextAlarm.repeatDays
+        )
+        val nextHuman = NativeAlarmScheduler.formatTriggerForUi(nextTrigger)
+        binding.nextAlarmSummaryText.text = "Next: ${nextAlarm.label} at $nextHuman • ${enabled.size} enabled"
+    }
+
     private fun buildAlarmCard(alarm: NativeAlarm): MaterialCardView {
+        val surfaceColor = MaterialColors.getColor(this, com.google.android.material.R.attr.colorSurfaceContainerHigh, 0)
+        val outlineColor = MaterialColors.getColor(this, com.google.android.material.R.attr.colorOutlineVariant, 0)
+        val titleColor = MaterialColors.getColor(this, com.google.android.material.R.attr.colorOnSurface, 0)
+        val metaColor = MaterialColors.getColor(this, com.google.android.material.R.attr.colorOnSurfaceVariant, 0)
+
         val card = MaterialCardView(this).apply {
-            radius = 20f
-            strokeWidth = 2
-            setCardBackgroundColor(Color.parseColor("#251F33"))
-            strokeColor = Color.parseColor("#4A3F63")
+            radius = dp(16).toFloat()
+            strokeWidth = dp(1)
+            setCardBackgroundColor(surfaceColor)
+            strokeColor = outlineColor
             cardElevation = 0f
             useCompatPadding = false
-            val lp = LinearLayout.LayoutParams(
+            layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-            lp.bottomMargin = 14
-            layoutParams = lp
+            ).apply { bottomMargin = dp(10) }
         }
 
         val wrap = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(24, 20, 24, 20)
+            setPadding(dp(14), dp(12), dp(14), dp(12))
         }
 
         val time = String.format(Locale.getDefault(), "%02d:%02d", alarm.hour, alarm.minute)
@@ -651,21 +692,21 @@ class MainActivity : AppCompatActivity() {
 
         val title = TextView(this).apply {
             text = "$time — ${alarm.label}"
-            textSize = 17f
-            setTextColor(Color.parseColor("#F4EEFF"))
+            textSize = 16f
+            setTextColor(titleColor)
         }
 
         val meta = TextView(this).apply {
             text = "$repeat | Sound: ${displayLabelForSoundType(alarm.soundType)} | ${if (alarm.enabled) "Enabled" else "Disabled"}\nNext: $next"
             textSize = 12f
-            setTextColor(Color.parseColor("#CAB8E6"))
-            setPadding(0, 6, 0, 0)
+            setTextColor(metaColor)
+            setPadding(0, dp(4), 0, 0)
         }
 
         val actions = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.END
-            setPadding(0, 12, 0, 0)
+            setPadding(0, dp(10), 0, 0)
         }
 
         val toggle = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
@@ -676,7 +717,7 @@ class MainActivity : AppCompatActivity() {
         val delete = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
             text = "Delete"
             setOnClickListener { deleteAlarm(alarm) }
-            setPadding(20, paddingTop, 20, paddingBottom)
+            setPadding(dp(14), paddingTop, dp(14), paddingBottom)
         }
 
         actions.addView(toggle)
@@ -710,27 +751,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showTab(tab: Tab): Boolean {
-        binding.createTab.visibility = if (tab == Tab.CREATE) android.view.View.VISIBLE else android.view.View.GONE
         binding.alarmsTab.visibility = if (tab == Tab.ALARMS) android.view.View.VISIBLE else android.view.View.GONE
+        binding.logsTab.visibility = if (tab == Tab.LOGS) android.view.View.VISIBLE else android.view.View.GONE
         binding.bridgeTab.visibility = if (tab == Tab.BRIDGE) android.view.View.VISIBLE else android.view.View.GONE
         if (tab == Tab.ALARMS) renderSavedAlarms()
+        if (tab == Tab.LOGS) renderLogs()
         return true
-    }
-
-    private fun showDebugMenu() {
-        val options = arrayOf("View logs", "Copy logs", "Clear logs", "Open exact alarm settings")
-        AlertDialog.Builder(this)
-            .setTitle("Debug menu")
-            .setItems(options) { _, which ->
-                when (which) {
-                    0 -> showLogsDialog()
-                    1 -> copyLogsToClipboard()
-                    2 -> clearLogs()
-                    3 -> openExactAlarmSettings()
-                }
-            }
-            .setNegativeButton("Close", null)
-            .show()
     }
 
     private fun openExactAlarmSettings() {
@@ -746,22 +772,8 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun showLogsDialog() {
-        val logs = getLogsText()
-        val view = TextView(this).apply {
-            text = logs
-            setPadding(32, 24, 32, 24)
-            textSize = 12f
-            setTextIsSelectable(true)
-            typeface = android.graphics.Typeface.MONOSPACE
-        }
-
-        AlertDialog.Builder(this)
-            .setTitle("Debug logs")
-            .setView(view)
-            .setPositiveButton("Close", null)
-            .setNeutralButton("Copy") { _, _ -> copyLogsToClipboard() }
-            .show()
+    private fun renderLogs() {
+        binding.logsText.text = getLogsText()
     }
 
     private fun copyLogsToClipboard() {
@@ -775,6 +787,7 @@ class MainActivity : AppCompatActivity() {
     private fun clearLogs() {
         synchronized(debugLogs) { debugLogs.clear() }
         logDebug("Logs cleared")
+        renderLogs()
         Toast.makeText(this, "Logs cleared", Toast.LENGTH_SHORT).show()
     }
 
@@ -790,7 +803,13 @@ class MainActivity : AppCompatActivity() {
             debugLogs.addFirst(line)
             while (debugLogs.size > MAX_DEBUG_LOG_LINES) debugLogs.removeLast()
         }
+        runOnUiThread {
+            binding.compactLogText.text = line
+            if (binding.logsTab.visibility == android.view.View.VISIBLE) renderLogs()
+        }
     }
+
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
     private fun updateBridgeStatus(text: String) {
         val historySuffix = if (recentBridgeEvents.isEmpty()) "" else "\nLast: ${recentBridgeEvents.first()}"
@@ -856,8 +875,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     enum class Tab {
-        CREATE,
         ALARMS,
+        LOGS,
         BRIDGE
     }
 

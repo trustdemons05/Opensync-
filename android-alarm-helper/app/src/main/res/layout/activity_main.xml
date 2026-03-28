@@ -6,30 +6,15 @@
     android:orientation="vertical"
     android:paddingTop="8dp">
 
-    <LinearLayout
+    <TextView
+        android:id="@+id/appTitle"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
         android:paddingStart="16dp"
-        android:paddingEnd="12dp"
-        android:paddingBottom="8dp">
-
-        <TextView
-            android:id="@+id/appTitle"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Koi Alarm Helper"
-            android:textAppearance="@style/TextAppearance.Material3.TitleLarge" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/debugMenuButton"
-            style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Debug" />
-    </LinearLayout>
+        android:paddingEnd="16dp"
+        android:paddingBottom="4dp"
+        android:text="Koi Alarm Helper"
+        android:textAppearance="@style/TextAppearance.Material3.TitleLarge" />
 
     <TextView
         android:id="@+id/statusText"
@@ -46,7 +31,7 @@
         android:layout_weight="1">
 
         <ScrollView
-            android:id="@+id/createTab"
+            android:id="@+id/alarmsTab"
             android:layout_width="match_parent"
             android:layout_height="match_parent">
 
@@ -56,17 +41,60 @@
                 android:orientation="vertical"
                 android:padding="16dp">
 
-                <TextView
-                    android:id="@+id/subtitleText"
+                <com.google.android.material.card.MaterialCardView
+                    android:id="@+id/alarmsSummaryCard"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Create native alarms fast."
-                    android:textAppearance="@style/TextAppearance.Material3.BodyMedium" />
+                    android:layout_marginBottom="12dp"
+                    app:cardBackgroundColor="#251F33"
+                    app:cardCornerRadius="18dp"
+                    app:cardElevation="0dp"
+                    app:strokeColor="#4A3F63"
+                    app:strokeWidth="1dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="16dp">
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Overview"
+                            android:textAppearance="@style/TextAppearance.Material3.TitleSmall"
+                            android:textColor="#F4EEFF" />
+
+                        <TextView
+                            android:id="@+id/nextAlarmSummaryText"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:text="No alarms set"
+                            android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
+                            android:textColor="#E7DBFC" />
+
+                        <TextView
+                            android:id="@+id/latestActivityText"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="6dp"
+                            android:text="Latest activity: --"
+                            android:textAppearance="@style/TextAppearance.Material3.BodySmall"
+                            android:textColor="#CAB8E6" />
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Create alarm"
+                    android:textAppearance="@style/TextAppearance.Material3.TitleMedium" />
 
                 <com.google.android.material.textfield.TextInputLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="14dp">
+                    android:layout_marginTop="12dp">
 
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/timeEditText"
@@ -123,8 +151,8 @@
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:maxLines="1"
-                        android:textAllCaps="false"
-                        android:text="Weekdays" />
+                        android:text="Weekdays"
+                        android:textAllCaps="false" />
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/dailyButton"
@@ -134,8 +162,8 @@
                         android:layout_marginStart="8dp"
                         android:layout_weight="1"
                         android:maxLines="1"
-                        android:textAllCaps="false"
-                        android:text="Daily" />
+                        android:text="Daily"
+                        android:textAllCaps="false" />
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/clearDaysButton"
@@ -145,8 +173,8 @@
                         android:layout_marginStart="8dp"
                         android:layout_weight="1"
                         android:maxLines="1"
-                        android:textAllCaps="false"
-                        android:text="Clear" />
+                        android:text="Clear"
+                        android:textAllCaps="false" />
                 </LinearLayout>
 
                 <com.google.android.material.textfield.TextInputLayout
@@ -177,24 +205,11 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="14dp"
                     android:text="Create native alarm" />
-            </LinearLayout>
-        </ScrollView>
-
-        <ScrollView
-            android:id="@+id/alarmsTab"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:visibility="gone">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="16dp">
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:layout_marginTop="18dp"
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
 
@@ -218,7 +233,84 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
+                    android:layout_marginBottom="8dp"
                     android:orientation="vertical" />
+            </LinearLayout>
+        </ScrollView>
+
+        <ScrollView
+            android:id="@+id/logsTab"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Logs"
+                    android:textAppearance="@style/TextAppearance.Material3.TitleMedium" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:orientation="horizontal">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/copyLogsButton"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Copy logs" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/clearLogsButton"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:layout_weight="1"
+                        android:text="Clear" />
+                </LinearLayout>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/exactAlarmSettingsButton"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="Open exact alarm settings" />
+
+                <com.google.android.material.card.MaterialCardView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:layout_marginBottom="10dp"
+                    app:cardBackgroundColor="#1B1626"
+                    app:cardCornerRadius="16dp"
+                    app:cardElevation="0dp"
+                    app:strokeColor="#423658"
+                    app:strokeWidth="1dp">
+
+                    <TextView
+                        android:id="@+id/logsTextView"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:minHeight="280dp"
+                        android:padding="14dp"
+                        android:text="No logs yet."
+                        android:textColor="#D8CCEE"
+                        android:textIsSelectable="true"
+                        android:textSize="12sp"
+                        android:typeface="monospace" />
+                </com.google.android.material.card.MaterialCardView>
             </LinearLayout>
         </ScrollView>
 
